@@ -1,0 +1,96 @@
+// ─────────────────────────────────────────────────────────────
+// OCRA — schema dati
+// Regole:
+//  • ogni modello di dominio ha tenantId (vedi src/server/db/tenant.ts)
+//  • ogni modifica = nuova migrazione (npm run db:migrate)
+//  • branding, moduli, listini vivono qui, mai nel codice
+// ─────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Cosa l'utente può fare. La società si sceglie in UI, non sta sull'utente.
+enum Role {
+  CEO
+  PROJECT_MANAGER
+  CREATIVE
+  EXTERNAL
+}
+
+/// Moduli attivabili per tenant (ordine = ordine di costruzione).
+enum ModuleKey {
+  PROGETTI
+  VERBALI
+  RICHIAMO
+  DOCUMENTI
+  MARGINE
+  PREVENTIVI
+}
+
+/// Cliente di OCRA (es. il gruppo di Daniele Masini).
+model Tenant {
+  id        String      @id @default(cuid())
+  slug      String      @unique
+  name      String
+  /// Dominio dedicato, es. ocra.fulcrolucem.it
+  domain    String?     @unique
+  modules   ModuleKey[] @default([])
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  companies Company[]
+  users     User[]
+}
+
+/// Società del tenant (Fulcro, Duit, St'Art). Porta il branding.
+model Company {
+  id         String   @id @default(cuid())
+  tenantId   String
+  slug       String
+  name       String
+  legalName  String?
+  vatNumber  String?
+  /// Colore brand per tema chiaro (hex)
+  colorLight String
+  /// Colore brand per tema scuro (hex)
+  colorDark  String
+  logoUrl    String?
+  /// Sfondo della tessera logo (hex), per loghi pensati su fondo pieno
+  logoBg     String?
+  sortOrder  Int      @default(0)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+}
+
+model User {
+  id              String    @id @default(cuid())
+  tenantId        String
+  email           String
+  name            String
+  /// Numero WhatsApp in formato E.164 — canale principale delle notifiche
+  phone           String?
+  role            Role
+  active          Boolean   @default(true)
+  /// Solo per EXTERNAL: dopo questa data l'accesso è negato
+  accessExpiresAt DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@index([email])
+}

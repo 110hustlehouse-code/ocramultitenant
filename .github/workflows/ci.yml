@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ocra
+          POSTGRES_PASSWORD: ocra
+          POSTGRES_DB: ocra
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ocra -d ocra"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ocra:ocra@localhost:5432/ocra
+      AUTH_SECRET: ci-only-secret-not-used-in-production
+      AUTH_TRUST_HOST: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run db:deploy
+      - name: Schema e migrazioni allineati
+        run: npm run db:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+/* Tema: data-theme="light|dark" su <html>, impostato da ThemeScript */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ─── Token: guscio neutro freddo ─────────────────────────── */
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #eef0f3;
+  --border: #dde1e7;
+  --text: #11151c;
+  --text-muted: #5a6372;
+
+  /* Stato: indipendenti dai brand */
+  --ok: #1f8a4c;
+  --warn: #a86a12;
+  --danger: #c0392b;
+
+  /* Brand di default (vista consolidata): neutro */
+  --brand-light: #11151c;
+  --brand-dark: #e8ecf1;
+  --on-brand-light: #ffffff;
+  --on-brand-dark: #000000;
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #0c0f14;
+  --surface: #141920;
+  --surface-2: #1b212a;
+  --border: #29303b;
+  --text: #e8ecf1;
+  --text-muted: #95a0ae;
+
+  --ok: #3dbe74;
+  --warn: #e0a43a;
+  --danger: #ef5a4c;
+
+  color-scheme: dark;
+}
+
+/*
+ * --brand va risolto sullo STESSO elemento che riceve i colori della società
+ * (una var() si calcola dove è dichiarata, poi i figli ereditano il valore).
+ * Il layout mette .brand-scope + le variabili inline sul contenitore.
+ */
+:root,
+.brand-scope {
+  --brand: var(--brand-light);
+  --on-brand: var(--on-brand-light);
+}
+
+[data-theme="dark"],
+[data-theme="dark"] .brand-scope {
+  --brand: var(--brand-dark);
+  --on-brand: var(--on-brand-dark);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-brand: var(--brand);
+  --color-on-brand: var(--on-brand);
+
+  --font-display: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Public Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Cifre sempre allineate */
+.num {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+.label {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
