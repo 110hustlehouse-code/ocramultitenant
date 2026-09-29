@@ -210,7 +210,75 @@ async function seedDemo() {
       });
     }
   }
-  console.log(`✓ Demo: tenant "${tenant.name}", ${clients.length} clienti, ${suppliers.length} fornitori.`);
+  // Progetti e task: date relative a oggi, così la demo mostra sempre scadenze vive.
+  const day = (offset: number) => new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() + offset, 12));
+  const people = new Map(
+    (await prisma.user.findMany({ where: { tenantId: tenant.id } })).map((u) => [u.email.split("@")[0], u.id]),
+  );
+  const partyId = async (name: string) =>
+    (await prisma.party.findFirst({ where: { tenantId: tenant.id, name }, select: { id: true } }))?.id ?? null;
+
+  type DemoTask = { title: string; who: string; due: number; done?: string; priority?: "NORMALE" | "ALTA" | "URGENTE" };
+  const projects: Array<{ code: string; name: string; at: string; client: string; service: string; start: number; due: number; tasks: DemoTask[] }> = [
+    {
+      code: "AP/EVENTI/03-2026/TEATRONUOVO/E", name: "Stagione Teatro Nuovo — serata di apertura", at: "AP",
+      client: "Fondazione Teatro Nuovo", service: "Produzione evento", start: -20, due: 12,
+      tasks: [
+        { title: "Sopralluogo tecnico con il service", who: "pm", due: -6, done: "Verbale sopralluogo nel Drive, cartella 01" },
+        { title: "Preventivo service audio e luci", who: "pm", due: -2, priority: "URGENTE" },
+        { title: "Piano di produzione v1", who: "pm", due: 3 },
+        { title: "Teaser video 15 secondi", who: "creativo", due: 5, priority: "ALTA" },
+      ],
+    },
+    {
+      code: "AS/BRAND/07-2026/SARTORI/E", name: "Rebranding Atelier Sartori", at: "AS",
+      client: "Atelier Sartori", service: "Brand development", start: -35, due: 20,
+      tasks: [
+        { title: "Moodboard e direzione estetica", who: "creativo", due: -15, done: "https://drive.example/sartori/moodboard.pdf" },
+        { title: "Proposte logo (2)", who: "creativo", due: -1 },
+        { title: "Tone of voice: prima bozza", who: "pm", due: 8 },
+      ],
+    },
+    {
+      code: "AM/LANCIO/02-2026/NORAVALE/E", name: "Lancio singolo Nora Vale", at: "AM",
+      client: "Nora Vale", service: "Launch strategy", start: -10, due: 28,
+      tasks: [
+        { title: "Dati di distribuzione dall'artista", who: "pm", due: 4 },
+        { title: "Copertina definitiva", who: "creativo", due: 9 },
+      ],
+    },
+  ];
+  for (const p of projects) {
+    const data = {
+      name: p.name, companyId: ids.get(p.at)!, clientId: await partyId(p.client), service: p.service,
+      startDate: day(p.start), dueDate: day(p.due), managerId: people.get("pm") ?? null, status: "ATTIVO" as const,
+    };
+    const project = await prisma.project.upsert({
+      where: { tenantId_code: { tenantId: tenant.id, code: p.code } },
+      update: data,
+      create: { ...data, code: p.code, tenantId: tenant.id },
+    });
+    // I task demo si rigenerano a ogni seed: date sempre fresche.
+    await prisma.task.deleteMany({ where: { projectId: project.id } });
+    for (const t of p.tasks) {
+      const assigneeId = people.get(t.who)!;
+      await prisma.task.create({
+        data: {
+          tenantId: tenant.id, projectId: project.id, title: t.title, assigneeId, dueDate: day(t.due),
+          priority: t.priority ?? "NORMALE",
+          ...(t.done ? { status: "FATTO" as const, proof: t.done, completedAt: day(t.due), completedById: assigneeId } : {}),
+        },
+      });
+      await prisma.projectMember.createMany({
+        data: [{ tenantId: tenant.id, projectId: project.id, userId: assigneeId }],
+        skipDuplicates: true,
+      });
+    }
+  }
+
+  console.log(
+    `✓ Demo: tenant "${tenant.name}", ${clients.length} clienti, ${suppliers.length} fornitori, ${projects.length} progetti.`,
+  );
 }
 
 main()

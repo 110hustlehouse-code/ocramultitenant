@@ -31,7 +31,7 @@ export const MODULES: readonly ModuleDefinition[] = [
     permission: "projects:read",
     summary: "Progetti con modelli configurabili per società, task con chiusura tramite prova.",
     step: 3,
-    ready: false,
+    ready: true,
   },
   {
     key: "VERBALI",
