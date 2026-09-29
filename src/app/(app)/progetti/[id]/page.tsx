@@ -1,4 +1,4 @@
-import { Pencil } from "lucide-react";
+import { Mic, Pencil } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { NewTaskForm } from "@/components/projects/NewTaskForm";
@@ -81,6 +81,9 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
                 </button>
               )}
             </form>
+            <ButtonLink href={`/verbali/nuovo?progetto=${project.id}`}>
+              <Mic className="size-4" aria-hidden /> Riunione
+            </ButtonLink>
             <ButtonLink href={`/progetti/${project.id}/modifica`}>
               <Pencil className="size-4" aria-hidden /> Modifica
             </ButtonLink>

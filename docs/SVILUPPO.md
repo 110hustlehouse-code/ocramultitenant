@@ -61,3 +61,34 @@ prisma/
 - Postgres risponde su `localhost:5432` (utente, password e database: `ocra`).
 - Le Server Actions e l'HMR accettano gli indirizzi `*.app.github.dev` (vedi `next.config.ts`).
 - Per ricreare il DB da zero: `npm run db:reset`.
+
+## Verbali: chiavi e archivio file
+
+Variabili (in `.env` e su Vercel):
+
+| Variabile | A cosa serve | Dove si prende |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Verbale e task proposti | console.anthropic.com → API Keys |
+| `DEEPGRAM_API_KEY` | Trascrizione audio (italiano, voci distinte) | console.deepgram.com → API Keys |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | Audio delle riunioni | Cloudflare → R2 → bucket + API token Object Read & Write |
+
+Senza chiavi la pagina funziona lo stesso: si incolla la trascrizione; registrazione e caricamento
+audio restano spenti. Senza `ANTHROPIC_API_KEY` il verbale va in errore con un messaggio chiaro.
+
+**CORS del bucket R2** (Cloudflare → R2 → bucket → Settings → CORS policy): il browser carica
+l'audio direttamente su R2, quindi il bucket deve accettare PUT dal dominio dell'app.
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://ocra.fulcrolucem.it", "https://ocragency.shop", "https://*.app.github.dev"],
+    "AllowedMethods": ["PUT", "GET"],
+    "AllowedHeaders": ["Content-Type"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+Flusso: audio su R2 (URL firmato) → Deepgram lo scarica e trascrive → Claude scrive il verbale e
+propone i task (strumento con schema, id validati) → il PM conferma → task con origine VERBALE.
+L'elaborazione gira dopo la risposta (`after`, `maxDuration = 300` sulla pagina del verbale).

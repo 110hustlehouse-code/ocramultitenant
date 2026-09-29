@@ -54,6 +54,7 @@ model Tenant {
   projects       Project[]
   projectMembers ProjectMember[]
   tasks          Task[]
+  meetings       Meeting[]
 }
 
 /// Società del tenant (Fulcro, Duit, St'Art). Porta il branding.
@@ -88,6 +89,7 @@ model Company {
   memberships Membership[]
   parties     PartyCompany[]
   projects    Project[]
+  meetings    Meeting[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -113,6 +115,7 @@ model User {
   projectMembers  ProjectMember[]
   assignedTasks   Task[]          @relation("TaskAssignee")
   completedTasks  Task[]          @relation("TaskCompletedBy")
+  meetings        Meeting[]
 
   @@unique([tenantId, email])
   @@index([email])
@@ -238,12 +241,13 @@ model Project {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
-  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  company Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  client  Party?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  manager User?           @relation("ProjectManager", fields: [managerId], references: [id], onDelete: SetNull)
-  members ProjectMember[]
-  tasks   Task[]
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company  Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  client   Party?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  manager  User?           @relation("ProjectManager", fields: [managerId], references: [id], onDelete: SetNull)
+  members  ProjectMember[]
+  tasks    Task[]
+  meetings Meeting[]
 
   @@unique([tenantId, code])
   @@index([tenantId, companyId, status])
@@ -279,16 +283,66 @@ model Task {
   source        TaskSource   @default(MANUALE)
   /// Prova di chiusura: link al file consegnato o nota breve (principio 1)
   proof         String?
+  /// Verbale da cui è stato estratto (source = VERBALE)
+  meetingId     String?
   completedAt   DateTime?
   completedById String?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
-  tenant      Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignee    User?   @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  completedBy User?   @relation("TaskCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee    User?    @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  completedBy User?    @relation("TaskCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+  meeting     Meeting? @relation(fields: [meetingId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, projectId])
+  @@index([meetingId])
   @@index([tenantId, assigneeId, status])
+}
+
+enum MeetingStatus {
+  /// Creato, in attesa di audio o trascrizione
+  BOZZA
+  /// Trascrizione e verbale in corso
+  IN_ELABORAZIONE
+  /// Verbale e task proposti pronti da rivedere
+  DA_RIVEDERE
+  /// Task confermati e creati
+  CONFERMATO
+  ERRORE
+}
+
+/// Riunione: audio → trascrizione → verbale → task proposti → confermati dal PM.
+model Meeting {
+  id          String        @id @default(cuid())
+  tenantId    String
+  companyId   String
+  /// Riunione di un progetto (i task proposti vanno lì per default)
+  projectId   String?
+  title       String
+  heldAt      DateTime
+  /// Oggetto su R2 con l'audio originale
+  audioKey    String?
+  durationSec Int?
+  transcript  String?
+  /// Verbale in markdown: partecipanti, punti, decisioni
+  minutes     String?
+  /// Task proposti dall'AI, da confermare (JSON validato con zod)
+  proposals   Json?
+  status      MeetingStatus @default(BOZZA)
+  error       String?
+  createdById String?
+  confirmedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  tasks     Task[]
+
+  @@index([tenantId, companyId, heldAt])
+  @@index([projectId])
 }
