@@ -229,7 +229,14 @@ export async function updateTask(ctx: AppContext, taskId: string, d: TaskInput) 
   const { task, manager } = await loadTask(ctx, taskId);
   if (!manager) throw new ProjectError("Solo CEO e PM modificano i task.");
   if (d.assigneeId) await assertUsersInCompany(ctx, task.project.companyId, [d.assigneeId]);
-  await ctx.db.task.update({ where: { id: taskId }, data: d });
+  // Nuova scadenza o nuova persona: i richiami ripartono da zero (decisione del CEO/PM).
+  const changed =
+    d.assigneeId !== task.assigneeId || (d.dueDate?.getTime() ?? null) !== (task.dueDate?.getTime() ?? null);
+  const reset = changed ? { escalation: 0, lastReminderAt: null, blockerNote: null, blockerAt: null } : {};
+  await ctx.db.task.update({ where: { id: taskId }, data: { ...d, ...reset } });
+  if (changed) {
+    await ctx.db.accountBlock.updateMany({ where: { taskId, releasedAt: null }, data: { releasedAt: new Date() } });
+  }
   await ensureMember(ctx, task.projectId, d.assigneeId);
 }
 
@@ -249,6 +256,8 @@ export async function completeTask(ctx: AppContext, taskId: string, rawProof: st
     where: { id: taskId },
     data: { status: "FATTO", proof: proof.data, completedAt: new Date(), completedById: ctx.user.id },
   });
+  // Consegnato: l'eventuale blocco dell'account su questo task si chiude da solo.
+  await ctx.db.accountBlock.updateMany({ where: { taskId, releasedAt: null }, data: { releasedAt: new Date() } });
 }
 
 export async function reopenTask(ctx: AppContext, taskId: string) {

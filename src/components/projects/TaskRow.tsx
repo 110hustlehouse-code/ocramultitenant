@@ -3,6 +3,7 @@
 import { Check, Link2, RotateCcw, Trash2 } from "lucide-react";
 import { useActionState, useState } from "react";
 import { buttonClass, inputClass } from "@/components/registry/ui";
+import { BlockerButton } from "@/components/reminders/BlockerButton";
 import { cn } from "@/lib/cn";
 import {
   completeTaskAction,
@@ -26,11 +27,26 @@ export type TaskRowData = {
   /** Etichetta di contesto (es. nome progetto nella vista «I miei task») */
   context?: string;
   contextHref?: string;
+  /** «Non posso» già segnalato */
+  blockerNote?: string | null;
+  /** Livello di richiamo (3 = al PM, 4 = al CEO) */
+  escalation?: number;
 };
 
 const isUrl = (s: string) => /^https?:\/\//i.test(s);
 
-export function TaskRow({ task, canComplete, canManage }: { task: TaskRowData; canComplete: boolean; canManage: boolean }) {
+export function TaskRow({
+  task,
+  canComplete,
+  canManage,
+  own = false,
+}: {
+  task: TaskRowData;
+  canComplete: boolean;
+  canManage: boolean;
+  /** Task dell'utente: può segnalare «Non posso» */
+  own?: boolean;
+}) {
   const [closing, setClosing] = useState(false);
   const [state, action, pending] = useActionState<CompleteState, FormData>(completeTaskAction, undefined);
   const done = task.status === "FATTO";
@@ -72,6 +88,16 @@ export function TaskRow({ task, canComplete, canManage }: { task: TaskRowData; c
               ))}
           </p>
           {task.description && <p className="mt-1 text-sm text-muted">{task.description}</p>}
+          {!done && canManage && (task.escalation ?? 0) >= 3 && (
+            <p className="mt-1 text-xs font-semibold text-warn">
+              {task.escalation === 4 ? "Passato al CEO" : task.blockerNote ? `Non può: «${task.blockerNote}»` : "Da gestire: già due promemoria"}
+            </p>
+          )}
+          {!done && own && !canManage && (
+            <div className="mt-1">
+              <BlockerButton taskId={task.id} note={task.blockerNote ?? null} />
+            </div>
+          )}
           {done && task.proof && (
             <p className="mt-1 flex items-center gap-1 text-sm">
               <Link2 className="size-3.5 text-ok" aria-hidden />

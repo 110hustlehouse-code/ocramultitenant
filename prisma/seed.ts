@@ -326,8 +326,31 @@ async function seedDemo() {
     data: { meetingId: confirmed.id, source: "VERBALE" },
   });
 
+  // Richiami demo: un task già passato al PM e un «Non posso», per mostrare la pagina Richiami.
+  const pmId = people.get("pm")!;
+  const sara = people.get("creativo")!;
+  const late = await prisma.task.findFirst({ where: { tenantId: tenant.id, title: "Proposte logo (2)" } });
+  if (late) {
+    await prisma.task.update({ where: { id: late.id }, data: { escalation: 3, lastReminderAt: day(0) } });
+    await prisma.reminder.deleteMany({ where: { taskId: late.id } });
+    await prisma.reminder.createMany({
+      data: [
+        { tenantId: tenant.id, taskId: late.id, recipientId: sara, kind: "AUTOMATICO", level: 1, delivered: true, createdAt: day(-1) },
+        { tenantId: tenant.id, taskId: late.id, recipientId: sara, kind: "AUTOMATICO", level: 2, delivered: true, createdAt: day(-1) },
+        { tenantId: tenant.id, taskId: late.id, recipientId: pmId, kind: "AL_PM", level: 3, delivered: true, createdAt: day(0) },
+      ],
+    });
+  }
+  const stuck = await prisma.task.findFirst({ where: { tenantId: tenant.id, title: "Copertina definitiva" } });
+  if (stuck) {
+    await prisma.task.update({
+      where: { id: stuck.id },
+      data: { escalation: 3, blockerNote: "Aspetto da Nora le foto definitive per la copertina", blockerAt: day(0) },
+    });
+  }
+
   console.log(
-    `✓ Demo: tenant "${tenant.name}", ${clients.length} clienti, ${suppliers.length} fornitori, ${projects.length} progetti, 2 verbali.`,
+    `✓ Demo: tenant "${tenant.name}", ${clients.length} clienti, ${suppliers.length} fornitori, ${projects.length} progetti, 2 verbali, richiami.`,
   );
 }
 

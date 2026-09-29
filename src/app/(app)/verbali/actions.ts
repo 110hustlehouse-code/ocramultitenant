@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
-import { getContext } from "@/server/context";
+import { assertNotBlocked, getContext } from "@/server/context";
 import {
   attachAudio,
   confirmMeeting,
@@ -19,6 +19,7 @@ import {
 async function ctxWithModule() {
   const ctx = await getContext();
   if (!ctx.tenant.modules.includes("VERBALI")) throw new Error("Modulo non attivo");
+  assertNotBlocked(ctx);
   return ctx;
 }
 

@@ -92,3 +92,20 @@ l'audio direttamente su R2, quindi il bucket deve accettare PUT dal dominio dell
 Flusso: audio su R2 (URL firmato) → Deepgram lo scarica e trascrive → Claude scrive il verbale e
 propone i task (strumento con schema, id validati) → il PM conferma → task con origine VERBALE.
 L'elaborazione gira dopo la risposta (`after`, `maxDuration = 300` sulla pagina del verbale).
+
+## Richiami: email e pianificazione
+
+1. **Email (Google Workspace).** Crea un account dedicato (es. `ocra@fulcrolucem.com`), attiva la
+   verifica in due passaggi e genera una *password per le app* su myaccount.google.com/apppasswords.
+   Poi `SMTP_USER`, `SMTP_PASS` e `SMTP_FROM` in `.env` e su Vercel. Senza, i richiami vengono
+   registrati come «non inviati» e il resto del flusso (PM, CEO, blocco) funziona lo stesso.
+2. **Pianificazione.** L'endpoint `/api/cron/richiami` va chiamato ogni ora con
+   `Authorization: Bearer <CRON_SECRET>`. Il modello `docs/modelli/richiami.yml` (da copiare in `.github/workflows/` dal sito di GitHub:
+   dal Codespace il push dei workflow è bloccato) lo fa gratis:
+   basta impostare i secrets `OCRA_URL` e `CRON_SECRET` nel repository. È idempotente: chiamarlo
+   più volte nella stessa ora non manda doppioni.
+
+Regole (`src/server/reminders/policy.ts`): 1° promemoria dalle 8 del giorno di scadenza,
+2° dalle 15 (o il mattino dopo), il giorno successivo passa al PM con un unico riepilogo.
+«Non posso» ferma gli automatici; nuova scadenza o nuova persona li fa ripartire da zero.
+Il blocco dell'account lo decidono PM o CEO e si toglie da solo alla consegna.

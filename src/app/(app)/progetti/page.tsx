@@ -44,6 +44,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
                 key={t.id}
                 canComplete
                 canManage={false}
+                own
                 task={{
                   id: t.id,
                   title: t.title,
@@ -56,6 +57,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
                   completedByName: null,
                   context: `${companies.get(t.project.companyId)?.poPrefix ?? ""} · ${t.project.name}`,
                   contextHref: `/progetti/${t.project.id}`,
+                  blockerNote: t.blockerNote,
                 }}
               />
             ))}

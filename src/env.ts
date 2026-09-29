@@ -23,6 +23,17 @@ const schema = z.object({
   R2_ACCESS_KEY_ID: z.string().optional(),
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_BUCKET: z.string().optional(),
+  // Email dei richiami: SMTP di Google Workspace (password per le app)
+  SMTP_HOST: z.string().default("smtp.gmail.com"),
+  SMTP_PORT: z.coerce.number().default(465),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  /** Mittente, es. "OCRA Fulcro <ocra@fulcrolucem.com>" */
+  SMTP_FROM: z.string().optional(),
+  /** Protegge l'endpoint che il pianificatore chiama ogni ora */
+  CRON_SECRET: z.string().optional(),
+  /** Indirizzo dell'app per i link nelle email, se il tenant non ha un dominio */
+  APP_URL: z.string().default("http://localhost:3000"),
 });
 
 export type ServerEnv = z.infer<typeof schema>;
@@ -62,5 +73,6 @@ export function integrations() {
     ai: Boolean(e.ANTHROPIC_API_KEY),
     transcription: Boolean(e.DEEPGRAM_API_KEY),
     storage: Boolean(e.R2_ACCOUNT_ID && e.R2_ACCESS_KEY_ID && e.R2_SECRET_ACCESS_KEY && e.R2_BUCKET),
+    email: Boolean(e.SMTP_USER && e.SMTP_PASS),
   };
 }

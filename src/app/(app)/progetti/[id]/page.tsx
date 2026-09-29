@@ -37,6 +37,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       key={t.id}
       canManage={project.canManage}
       canComplete={project.canManage || t.assigneeId === ctx.user.id}
+      own={t.assigneeId === ctx.user.id}
       task={{
         id: t.id,
         title: t.title,
@@ -48,6 +49,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         assigneeName: t.assignee?.name ?? null,
         proof: t.proof,
         completedByName: t.completedBy?.name ?? null,
+        blockerNote: t.blockerNote,
+        escalation: t.escalation,
       }}
     />
   );

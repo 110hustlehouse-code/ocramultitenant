@@ -47,9 +47,9 @@ export const MODULES: readonly ModuleDefinition[] = [
     label: "Richiami",
     href: "/richiami",
     permission: "reminders:read",
-    summary: "Richiamo che insiste ma non blocca. Escalation al PM e poi al CEO.",
+    summary: "Due promemoria automatici via email, poi il task passa al PM e al CEO. Il blocco lo decidono le persone.",
     step: 5,
-    ready: false,
+    ready: true,
   },
   {
     key: "DOCUMENTI",
