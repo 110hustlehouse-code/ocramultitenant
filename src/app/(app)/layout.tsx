@@ -5,7 +5,6 @@ import { brandStyle } from "@/components/shell/brand";
 import { Nav, type NavItem } from "@/components/shell/Nav";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { MODULES } from "@/lib/modules";
-import { signOutAction } from "@/server/auth/actions";
 import { ROLE_LABELS } from "@/server/auth/permissions";
 import { selectCompany } from "@/server/company/actions";
 import { hasModuleAccess, getContext } from "@/server/context";
@@ -56,7 +55,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <p className="label truncate">{ctx.role ? ROLE_LABELS[ctx.role] : "Vista consolidata"}</p>
           </div>
           <ThemeToggle />
-          <form action={signOutAction}>
+          <form action="/api/dev-logout" method="POST">
             <button
               type="submit"
               title="Esci"
@@ -77,7 +76,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <span className="font-[family-name:var(--font-display)] text-lg font-extrabold">OCRA</span>
             <span className="ml-auto" />
             <ThemeToggle />
-            <form action={signOutAction}>
+            <form action="/api/dev-logout" method="POST">
               <button
                 type="submit"
                 aria-label="Esci"
