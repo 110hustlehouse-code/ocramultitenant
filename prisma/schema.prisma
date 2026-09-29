@@ -59,6 +59,10 @@ model Tenant {
   meetingIntegrations MeetingIntegration[]
   clientFollowUps     ClientFollowUp[]
   clientMessages      ClientMessage[]
+  serviceItems        ServiceItem[]
+  quotes              Quote[]
+  quoteLines          QuoteLine[]
+  projectBudgetLines  ProjectBudgetLine[]
   reminders           Reminder[]
   accountBlocks       AccountBlock[]
 }
@@ -86,6 +90,13 @@ model Company {
   legalRepresentative String?
   /// Acronimo usato nei codici PO (es. FL, DT)
   poPrefix            String?
+  /// Preventivi: prossimo numero (progressivo per società, continuo negli anni)
+  nextQuoteNumber     Int      @default(1)
+  /// Condizioni predefinite (es. «50% alla firma, saldo alla consegna»)
+  quoteTerms          String?
+  quoteValidityDays   Int      @default(30)
+  /// Piè di pagina del preventivo (IBAN, note)
+  quoteFooter         String?
   sortOrder           Int      @default(0)
   active              Boolean  @default(true)
   createdAt           DateTime @default(now())
@@ -97,6 +108,8 @@ model Company {
   projects            Project[]
   meetings            Meeting[]
   meetingIntegrations MeetingIntegration[]
+  serviceItems        ServiceItem[]
+  quotes              Quote[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -127,6 +140,7 @@ model User {
   followUpsStarted    ClientFollowUp[]     @relation("FollowUpStartedBy")
   followUpsResolved   ClientFollowUp[]     @relation("FollowUpResolvedBy")
   clientMessagesSent  ClientMessage[]
+  quotesCreated       Quote[]
   reminders           Reminder[]           @relation("ReminderRecipient")
   blocks              AccountBlock[]       @relation("BlockedUser")
   blocksIssued        AccountBlock[]       @relation("BlockedBy")
@@ -180,6 +194,8 @@ model Party {
   phone       String?
   /// Categorie merceologiche, al massimo 3
   categories  String[]  @default([])
+  /// Sigla per il codice PO (es. TEATRONUOVO); se manca si ricava dal nome
+  shortCode   String?
   notes       String?
   active      Boolean   @default(true)
   createdAt   DateTime  @default(now())
@@ -189,6 +205,7 @@ model Party {
   companies PartyCompany[]
   projects  Project[]
   followUps ClientFollowUp[]
+  quotes    Quote[]
 
   @@unique([tenantId, kind, vatNumber])
   @@index([tenantId, kind])
@@ -265,6 +282,8 @@ model Project {
   meetings            Meeting[]
   meetingIntegrations MeetingIntegration[]
   followUps           ClientFollowUp[]
+  quote               Quote?
+  budgetLines         ProjectBudgetLine[]
 
   @@unique([tenantId, code])
   @@index([tenantId, companyId, status])
@@ -563,4 +582,136 @@ model ClientMessage {
   sentBy   User?          @relation(fields: [sentById], references: [id], onDelete: SetNull)
 
   @@index([followUpId])
+}
+
+/// Listino della società: da qui si compongono i preventivi (anche con Claude). Nel DB, mai nel codice.
+model ServiceItem {
+  id          String   @id @default(cuid())
+  tenantId    String
+  companyId   String
+  name        String
+  description String?
+  /// Segmento SERVIZIO del codice PO (es. EVENTI, BRAND, COMUNIC)
+  poCode      String
+  /// forfait, giorno, ora, pezzo…
+  unit        String   @default("forfait")
+  /// Prezzo di listino per unità, in centesimi
+  unitPrice   Int
+  /// Costo interno previsto per unità, in centesimi (solo CEO): base del budget del Margine
+  unitCost    Int?
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  quoteLines  QuoteLine[]
+  budgetLines ProjectBudgetLine[]
+
+  @@index([tenantId, companyId, active])
+}
+
+enum QuoteStatus {
+  BOZZA
+  INVIATO
+  ACCETTATO
+  RIFIUTATO
+}
+
+/// Preventivo. Accettato → nasce il progetto, con le voci come budget (docs/piani/PREVENTIVI.md).
+model Quote {
+  id                String      @id @default(cuid())
+  tenantId          String
+  companyId         String
+  clientId          String
+  /// Progressivo per società, continuo negli anni (Fulcro riparte da 30)
+  number            Int
+  title             String
+  status            QuoteStatus @default(BOZZA)
+  issueDate         DateTime
+  validUntil        DateTime?
+  intro             String?
+  terms             String?
+  /// Aliquota IVA unica del preventivo, in percentuale
+  vatRate           Int         @default(22)
+  /// Importi in centesimi, ricalcolati dal server a ogni salvataggio
+  subtotal          Int         @default(0)
+  vat               Int         @default(0)
+  total             Int         @default(0)
+  /// Il brief da cui Claude ha proposto le voci
+  brief             String?
+  sentAt            DateTime?
+  acceptedAt        DateTime?
+  rejectedAt        DateTime?
+  rejectionNote     String?
+  /// Passi dopo l'accettazione: si segnano, non bloccano
+  contractSignedAt  DateTime?
+  depositReceivedAt DateTime?
+  /// Progetto creato all'accettazione
+  projectId         String?     @unique
+  createdById       String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company   Company     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  client    Party       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  project   Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy User?       @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  lines     QuoteLine[]
+
+  @@unique([companyId, number])
+  @@index([tenantId, companyId, status])
+}
+
+/// Voce del preventivo: copia della voce di listino (il preventivo non cambia se cambia il listino).
+model QuoteLine {
+  id            String  @id @default(cuid())
+  tenantId      String
+  quoteId       String
+  /// null = voce fuori listino
+  serviceItemId String?
+  description   String
+  quantity      Decimal @db.Decimal(10, 2)
+  unit          String
+  /// Centesimi
+  unitPrice     Int
+  total         Int
+  /// Costo previsto (interno, mai nel PDF), in centesimi: diventa il costo di budget
+  plannedCost   Int?
+  sortOrder     Int     @default(0)
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  quote       Quote              @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  serviceItem ServiceItem?       @relation(fields: [serviceItemId], references: [id], onDelete: SetNull)
+  budgetLine  ProjectBudgetLine?
+
+  @@index([quoteId])
+}
+
+/// Budget del progetto: nasce dalle voci del preventivo accettato, poi vive da solo (varianti, extra).
+/// Il Margine confronterà i costi reali con queste righe.
+model ProjectBudgetLine {
+  id            String   @id @default(cuid())
+  tenantId      String
+  projectId     String
+  /// Voce del preventivo da cui nasce (null = aggiunta dopo)
+  quoteLineId   String?  @unique
+  serviceItemId String?
+  description   String
+  /// Ricavo previsto, centesimi
+  revenue       Int
+  /// Costo previsto, centesimi
+  plannedCost   Int?
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  quoteLine   QuoteLine?   @relation(fields: [quoteLineId], references: [id], onDelete: SetNull)
+  serviceItem ServiceItem? @relation(fields: [serviceItemId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
 }

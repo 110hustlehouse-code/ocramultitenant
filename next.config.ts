@@ -23,6 +23,10 @@ const nextConfig: NextConfig = {
     },
   },
   poweredByHeader: false,
+  // Il PDF del preventivo legge font e loghi dal disco: vanno inclusi nella funzione.
+  outputFileTracingIncludes: {
+    "/preventivi/[id]/pdf": ["./src/server/quotes/fonts/**/*", "./public/brands/**/*"],
+  },
 };
 
 export default nextConfig;
