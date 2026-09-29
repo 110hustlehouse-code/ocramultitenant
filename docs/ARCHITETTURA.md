@@ -9,8 +9,14 @@ Tenant  (cliente OCRA, es. Gruppo Masini)
  ├─ Company[]         società: branding (colori, logo) + dati giuridici (P.IVA, PEC, SDI, REA, legale rapp., prefisso PO)
  ├─ User[]            persone (nessun ruolo qui)
  ├─ Membership[]      (utente, società) → role = CEO | PROJECT_MANAGER | CREATIVE | EXTERNAL
+ ├─ Project[]         commesse per società: cliente (Party), PM, PO, date, team (ProjectMember)
+ │   └─ Task[]         da fare / fatto; chiusura solo con prova (link o nota); origine manuale o verbale
  └─ Party[]           anagrafiche: kind = CLIENTE | FORNITORE, collegate alle società via PartyCompany
 ```
+
+**Progetti.** CEO e PM vedono tutti i progetti della società; collaboratori ed esterni solo quelli
+in cui sono nel team o hanno un task, e dentro solo i propri task. L'elenco segue la società
+selezionata; dettaglio e chiusura task valgono su tutte le società dell'utente (link da «I tuoi task»).
 
 **Anagrafiche.** Un cliente/fornitore è unico nel gruppo (P.IVA, poi CF, poi nome) e si collega
 a una o più società. Ognuno vede quelle delle società che guarda; modifiche ed eliminazioni toccano

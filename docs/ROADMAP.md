@@ -6,8 +6,9 @@ Ogni modulo alimenta quello dopo. Non si salta un passo.
 |---|---|---|---|
 | 1 | Accesso, gestione dei clienti, ruoli, selettore società | ✅ fatto | Ruoli per società (Membership) e dati giuridici: 29 set |
 | 2 | Clienti e fornitori | ✅ fatto | Anagrafica unica per società, import CSV (tutto o niente), P.IVA/CF/SDI validati |
-| 3 | Progetti e task | ⏳ prossimo | Modelli di progetto configurabili per società; chiusura di un task allegando una prova |
-| 4 | Verbali AI → estrazione dei task | | Il modulo che dimostra la tesi. Claude API |
+| 3 | Progetti e task | ✅ fatto | Task si chiude solo con prova; «I tuoi task» in cima; collaboratori vedono solo i propri |
+| 3b | (modello di progetto per società) | | Fasi e campi personalizzati: dopo i verbali, se serve | Modelli di progetto configurabili per società; chiusura di un task allegando una prova |
+| 4 | Verbali ⏳ prossimo AI → estrazione dei task | | Il modulo che dimostra la tesi. Claude API |
 | 5 | Richiamo ed escalation | | WhatsApp, poi email, poi web push. Escalation al PM e poi al CEO. Blocco duro solo dal CEO |
 | 6 | Documenti | | File di progetto e prove |
 | 7 | Margine in tempo reale e consolidato | | Il modulo che vale di più in vendita. Solo per il CEO |
