@@ -9,6 +9,7 @@ import {
   Receipt,
   BellRing,
   TrendingUp,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -17,6 +18,7 @@ import { cn } from "@/lib/cn";
 
 const ICONS: Record<ModuleKey | "HOME", LucideIcon> = {
   HOME: LayoutDashboard,
+  ANAGRAFICHE: Users,
   PROGETTI: FolderKanban,
   VERBALI: NotebookPen,
   RICHIAMO: BellRing,

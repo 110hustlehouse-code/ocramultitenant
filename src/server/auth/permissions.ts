@@ -5,6 +5,8 @@ import type { Role } from "@/generated/prisma/enums";
  * Aggiungi permessi quando nasce un modulo, mai controlli sul ruolo sparsi nel codice.
  */
 export const PERMISSIONS = [
+  "registry:read",
+  "registry:write",
   "projects:read",
   "projects:write",
   "tasks:read:all",
@@ -24,6 +26,8 @@ export type Permission = (typeof PERMISSIONS)[number];
 const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   CEO: PERMISSIONS,
   PROJECT_MANAGER: [
+    "registry:read",
+    "registry:write",
     "projects:read",
     "projects:write",
     "tasks:read:all",

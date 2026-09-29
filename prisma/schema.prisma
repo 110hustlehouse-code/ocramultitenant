@@ -26,6 +26,7 @@ enum Role {
 
 /// Moduli attivabili per tenant (ordine = ordine di costruzione).
 enum ModuleKey {
+  ANAGRAFICHE
   PROGETTI
   VERBALI
   RICHIAMO
@@ -45,9 +46,11 @@ model Tenant {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  companies   Company[]
-  users       User[]
-  memberships Membership[]
+  companies      Company[]
+  users          User[]
+  memberships    Membership[]
+  parties        Party[]
+  partyCompanies PartyCompany[]
 }
 
 /// Società del tenant (Fulcro, Duit, St'Art). Porta il branding.
@@ -78,8 +81,9 @@ model Company {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   memberships Membership[]
+  parties     PartyCompany[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -123,6 +127,57 @@ model Membership {
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([userId, companyId])
+  @@index([tenantId])
+  @@index([companyId])
+}
+
+enum PartyKind {
+  CLIENTE
+  FORNITORE
+}
+
+/// Anagrafica: un cliente o un fornitore del gruppo.
+/// Stessa struttura per entrambi (richiesta di Daniele, 28 set). Le persone fisiche
+/// (artisti, collaboratori) hanno il codice fiscale al posto della P.IVA.
+model Party {
+  id          String    @id @default(cuid())
+  tenantId    String
+  kind        PartyKind
+  /// Ragione sociale, o nome e cognome per le persone fisiche
+  name        String
+  vatNumber   String?
+  taxCode     String?
+  pec         String?
+  sdiCode     String?
+  /// Referente: nome, email e cellulare
+  contactName String?
+  email       String?
+  phone       String?
+  /// Categorie merceologiche, al massimo 3
+  categories  String[]  @default([])
+  notes       String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  companies PartyCompany[]
+
+  @@unique([tenantId, kind, vatNumber])
+  @@index([tenantId, kind])
+}
+
+/// Società di riferimento di un'anagrafica (può lavorare con più società del gruppo).
+model PartyCompany {
+  tenantId  String
+  partyId   String
+  companyId String
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  party   Party   @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([partyId, companyId])
   @@index([tenantId])
   @@index([companyId])
 }

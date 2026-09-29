@@ -5,12 +5,13 @@ Ogni modulo alimenta quello dopo. Non si salta un passo.
 | # | Modulo | Stato | Note |
 |---|---|---|---|
 | 1 | Accesso, gestione dei clienti, ruoli, selettore società | ✅ fatto | Ruoli per società (Membership) e dati giuridici: 29 set |
-| 2 | Progetti e task | ⏳ prossimo | Modelli di progetto configurabili per società; chiusura di un task allegando una prova |
-| 3 | Verbali AI → estrazione dei task | | Il modulo che dimostra la tesi. Claude API |
-| 4 | Richiamo ed escalation | | WhatsApp, poi email, poi web push. Escalation al PM e poi al CEO. Blocco duro solo dal CEO |
-| 5 | Documenti | | File di progetto e prove |
-| 6 | Margine in tempo reale e consolidato | | Il modulo che vale di più in vendita. Solo per il CEO |
-| 7 | Preventivi e creazione automatica del progetto | | Preventivo accettato → progetto, cartella Drive, board (n8n) |
+| 2 | Clienti e fornitori | ✅ fatto | Anagrafica unica per società, import CSV (tutto o niente), P.IVA/CF/SDI validati |
+| 3 | Progetti e task | ⏳ prossimo | Modelli di progetto configurabili per società; chiusura di un task allegando una prova |
+| 4 | Verbali AI → estrazione dei task | | Il modulo che dimostra la tesi. Claude API |
+| 5 | Richiamo ed escalation | | WhatsApp, poi email, poi web push. Escalation al PM e poi al CEO. Blocco duro solo dal CEO |
+| 6 | Documenti | | File di progetto e prove |
+| 7 | Margine in tempo reale e consolidato | | Il modulo che vale di più in vendita. Solo per il CEO |
+| 8 | Preventivi e creazione automatica del progetto | | Preventivo accettato → progetto, cartella Drive, board (n8n) |
 
 ## Priorità dette da Daniele (23 set) — Fase 1
 1. **Verbali**: registrazione in sede (tasto «ascolto») e da Meet/Teams/Zoom → trascrizione → task assegnati
@@ -20,6 +21,12 @@ Ogni modulo alimenta quello dopo. Non si salta un passo.
 Fondamenta dati prima dei verbali: **Clienti e Fornitori** (import CSV, il caricamento lo fanno loro),
 **Progetti e task**. Preventivi numerati da OCRA (si riparte dal n. 30), poi ricopiati su Fatture in Cloud.
 Collaudo: 2 settimane senza errori con tutto il team.
+
+## Demo di vendita
+Stesso codice, secondo tenant «Aurora (demo)» con dati inventati (seed, dominio `ocragency.shop`).
+Quando questa versione mostra più della demo vecchia (anagrafiche + progetti + verbali),
+`ocragency.shop` passa qui e la repo `ocra` si archivia. Gli strumenti AI dello Studio restano
+su un sottodominio finché non entrano con la Fase 3.
 
 ## Ordine della demo
 **Margine a rischio** → **verbale che genera i task** → **richiamo**.
