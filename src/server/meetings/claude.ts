@@ -1,7 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "@/env";
-import { buildPrompt, MINUTES_SCHEMA, normalizeOutput, SYSTEM_PROMPT, type Person, type ProjectRef } from "./extract";
+import { buildPrompt, MINUTES_SCHEMA, normalizeOutput, SYSTEM_PROMPT, type MinutesMeta, type Person, type ProjectRef } from "./extract";
 
 /** Chiama Claude con structured outputs: la risposta è sempre JSON conforme a MINUTES_SCHEMA. */
 export async function writeMinutes(input: {
@@ -11,6 +11,8 @@ export async function writeMinutes(input: {
   people: Person[];
   projects: ProjectRef[];
   defaultProjectId: string | null;
+  durationSec: number | null;
+  verbalizer: string;
 }) {
   const e = env();
   if (!e.ANTHROPIC_API_KEY) throw new Error("AI non configurata (ANTHROPIC_API_KEY).");
@@ -32,5 +34,6 @@ export async function writeMinutes(input: {
   } catch {
     throw new Error("L'AI ha restituito un verbale illeggibile. Riprova.");
   }
-  return normalizeOutput(raw, input);
+  const meta: MinutesMeta = { heldAt: input.heldAt, durationSec: input.durationSec, verbalizer: input.verbalizer };
+  return normalizeOutput(raw, { ...input, meta });
 }

@@ -134,6 +134,13 @@ export async function startProcessing(ctx: AppContext, id: string) {
   return { tenantId: ctx.tenant.id, meetingId: id };
 }
 
+/** Il verbale lo scrive OCRA; si dice per conto di chi (o da quale collegamento) è partito. */
+export function verbalizer(m: { createdBy: { name: string } | null; integration: { name: string } | null }): string {
+  if (m.createdBy) return `OCRA, per ${m.createdBy.name}`;
+  if (m.integration) return `OCRA, da «${m.integration.name}»`;
+  return "OCRA";
+}
+
 export type ProcessingDeps = {
   transcribe: (url: string) => Promise<{ text: string; durationSec: number | null }>;
   signedUrl: (key: string) => Promise<string>;
@@ -149,11 +156,16 @@ const realDeps: ProcessingDeps = { transcribe: transcribeUrl, signedUrl: (k) => 
 export async function runProcessing(job: { tenantId: string; meetingId: string }, deps: ProcessingDeps = realDeps) {
   const db = prisma.$extends(tenantExtension(job.tenantId));
   try {
-    const meeting = await db.meeting.findFirstOrThrow({ where: { id: job.meetingId } });
+    const meeting = await db.meeting.findFirstOrThrow({
+      where: { id: job.meetingId },
+      include: { createdBy: { select: { name: true } }, integration: { select: { name: true } } },
+    });
     let transcript = meeting.transcript;
+    let durationSec = meeting.durationSec;
     if (!transcript && meeting.audioKey) {
       const result = await deps.transcribe(await deps.signedUrl(meeting.audioKey));
       transcript = result.text;
+      durationSec = result.durationSec;
       await db.meeting.update({ where: { id: meeting.id }, data: { transcript, durationSec: result.durationSec } });
     }
     if (!transcript) throw new MeetingError("Manca la trascrizione.");
@@ -175,6 +187,8 @@ export async function runProcessing(job: { tenantId: string; meetingId: string }
       people,
       projects: projects.map((p) => ({ id: p.id, name: p.name, client: p.client?.name ?? null })),
       defaultProjectId: meeting.projectId,
+      durationSec,
+      verbalizer: verbalizer(meeting),
     });
     await db.meeting.update({
       where: { id: meeting.id },

@@ -44,11 +44,13 @@ describe.skipIf(!url)("verbali sul database", () => {
     await prisma.$disconnect();
   });
 
-  const fakeDeps = (seen: { people?: string[] } = {}): ProcessingDeps => ({
+  const fakeDeps = (seen: { people?: string[]; verbalizer?: string; durationSec?: number | null } = {}): ProcessingDeps => ({
     signedUrl: async (k) => `https://r2.example/${k}`,
     transcribe: async (u) => ({ text: `[00:01] Voce 1: da ${u}. Marco, montaggio entro venerdì.`, durationSec: 1800 }),
     minutes: async (input) => {
       seen.people = input.people.map((p) => p.name).sort();
+      seen.verbalizer = input.verbalizer;
+      seen.durationSec = input.durationSec;
       return {
         minutes: "## Decisioni\n- Montaggio entro venerdì",
         proposals: [
@@ -71,9 +73,9 @@ describe.skipIf(!url)("verbali sul database", () => {
 
     const job = await startProcessing(asPm(), m.id);
     await expect(startProcessing(asPm(), m.id)).rejects.toThrow(/già in corso/);
-    const seen: { people?: string[] } = {};
+    const seen: { people?: string[]; verbalizer?: string; durationSec?: number | null } = {};
     await runProcessing(job, fakeDeps(seen));
-    expect(seen.people).toEqual(["Erika", "Marco Villa"]);
+    expect(seen).toMatchObject({ people: ["Erika", "Marco Villa"], verbalizer: "OCRA, per Erika", durationSec: 1800 });
 
     const ready = await getMeeting(asPm(), m.id);
     expect(ready).toMatchObject({ status: "DA_RIVEDERE", durationSec: 1800, canWrite: true, source: "REGISTRAZIONE" });

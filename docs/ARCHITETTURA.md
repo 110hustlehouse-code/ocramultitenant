@@ -62,6 +62,11 @@ servizio esterno (webhook) ─────────────────�
   Stesso `id` esterno → nessun doppione. Progetto: quello del collegamento, poi il codice PO inviato, poi nessuno
   (Claude lo propone task per task). Formato del corpo: `src/server/meetings/inbound.ts`.
 - Un'elaborazione «in corso» da più di 10 minuti è considerata interrotta e si può riprovare.
+- **Formato del verbale**: quello del modello di Fulcro e St'Art («Sc. Verbali Riunioni»). Claude restituisce
+  i campi (structured outputs, `MINUTES_SCHEMA`); `renderMinutes` compone il testo sempre con le stesse sezioni:
+  dati della riunione (data, orario, tipo, durata, partecipanti, oratore, verbalizzatore), ordine del giorno con
+  durata stimata, sintesi per punto, decisioni prese (solo quelle formali), azioni assegnate (= i task proposti),
+  prossimo appuntamento. Il verbalizzatore lo scrive il sistema: «OCRA, per <chi l'ha avviato>» o il collegamento.
 
 ## Isolamento fra clienti
 

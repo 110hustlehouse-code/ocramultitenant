@@ -73,13 +73,17 @@ describe.skipIf(!url)("collegamenti e riunioni da servizi esterni", () => {
 
     const first = await ingestMeeting(integration, inbound({ project: `dt/nora-${suffix}` }));
     expect(first).toMatchObject({ duplicate: false, job: { tenantId } });
+    let verbalizer = "";
     await runProcessing(first.job!, {
       signedUrl: async () => "",
       transcribe: async () => { throw new Error("non deve trascrivere"); },
-      minutes: async (input) => ({
-        minutes: "## Decisioni",
-        proposals: [{ key: "p0", title: "Montaggio", assigneeId: pm.id, assigneeMention: "Erika", projectId: input.defaultProjectId, dueDate: null, priority: "NORMALE", evidence: null }],
-      }),
+      minutes: async (input) => {
+        verbalizer = input.verbalizer;
+        return {
+          minutes: "## Decisioni",
+          proposals: [{ key: "p0", title: "Montaggio", assigneeId: pm.id, assigneeMention: "Erika", projectId: input.defaultProjectId, dueDate: null, priority: "NORMALE", evidence: null }],
+        };
+      },
     });
     expect(await getMeeting(asPm(), first.meetingId)).toMatchObject({
       status: "DA_RIVEDERE",
@@ -90,6 +94,7 @@ describe.skipIf(!url)("collegamenti e riunioni da servizi esterni", () => {
       proposals: [{ projectId }],
     });
 
+    expect(verbalizer).toBe("OCRA, da «n8n»");
     const again = await ingestMeeting(integration, inbound({ project: `dt/nora-${suffix}` }));
     expect(again).toEqual({ meetingId: first.meetingId, duplicate: true, job: null });
 

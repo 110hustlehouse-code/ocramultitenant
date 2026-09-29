@@ -96,6 +96,13 @@ function joinSentences(sentences: z.infer<typeof sentenceSchema>[]): string {
   return lines.join("\n");
 }
 
+/** Orario HH:MM a Roma, se la data inviata lo contiene. */
+function toTime(value: string | null | undefined): string | null {
+  if (!value || /^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Rome" });
+}
+
 function toDay(value: string | null | undefined, now: Date): string | null {
   if (!value) return now.toLocaleDateString("sv-SE", { timeZone: "Europe/Rome" });
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
@@ -120,8 +127,11 @@ export function parseInbound(body: unknown, now = new Date()): ParseResult {
   if (transcript.length < MIN_TRANSCRIPT_CHARS) {
     return { ok: false, error: "Manca la trascrizione (transcript o sentences) o è troppo corta." };
   }
+  // Quello che il servizio sa già va in testa al testo: Claude lo usa per i dati del verbale.
   const people = (p.participants ?? []).filter(Boolean);
-  if (people.length) transcript = `Partecipanti: ${people.join(", ")}\n\n${transcript}`;
+  const start = toTime(p.date);
+  const header = [start && `Orario di inizio: ${start}`, people.length && `Partecipanti: ${people.join(", ")}`].filter(Boolean);
+  if (header.length) transcript = `${header.join("\n")}\n\n${transcript}`;
 
   return {
     ok: true,

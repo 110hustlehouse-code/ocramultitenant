@@ -29,21 +29,49 @@ export type Proposal = z.infer<typeof proposalSchema>;
 export const proposalsSchema = z.array(proposalSchema);
 
 /**
- * Schema della risposta (structured outputs): Claude risponde solo con JSON che lo rispetta.
- * Niente strumento forzato: i modelli recenti non accettano più `tool_choice` di tipo «tool».
+ * Schema della risposta (structured outputs): Claude restituisce i campi del modello di verbale
+ * usato da Fulcro e St'Art («Sc. Verbali Riunioni»); il testo lo compone renderMinutes, sempre
+ * uguale. Niente strumento forzato: i modelli recenti non accettano `tool_choice` di tipo «tool».
  */
+const nullableString = (description: string) => ({ type: ["string", "null"], description });
+
 export const MINUTES_SCHEMA = {
   type: "object" as const,
   additionalProperties: false,
   properties: {
-    minutes: {
-      type: "string",
+    meetingType: nullableString("Tipo di riunione in poche parole (es. «Produzione», «Call con il cliente», «Kick-off»)."),
+    startTime: nullableString(
+      "Ora del giorno di inizio HH:MM, solo se detta o indicata («Orario di inizio»). Mai dai minutaggi [mm:ss]. Altrimenti null.",
+    ),
+    estimatedDurationMin: {
+      type: ["integer", "null"],
+      description: "Durata in minuti, se si ricava dagli orari della trascrizione; altrimenti null.",
+    },
+    participants: { type: "array", items: { type: "string" }, description: "Nomi dei partecipanti, come si chiamano tra loro." },
+    speaker: nullableString("Oratore: chi ha guidato la riunione; null se non chiaro."),
+    agenda: {
+      type: "array",
+      description: "Ordine del giorno: i punti trattati, nell'ordine in cui sono stati affrontati.",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Argomento del punto, breve." },
+          estimatedMinutes: { type: ["integer", "null"], description: "Durata stimata della discussione del punto, in minuti." },
+          summary: { type: "string", description: "Sintesi fedele della discussione su questo punto, 1-4 frasi." },
+        },
+        required: ["title", "estimatedMinutes", "summary"],
+        additionalProperties: false,
+      },
+    },
+    decisions: {
+      type: "array",
+      items: { type: "string" },
       description:
-        "Verbale in italiano, in markdown, con le sezioni: ## Partecipanti, ## Punti discussi, ## Decisioni, ## Prossimi passi. Sintetico e fedele: niente che non sia stato detto.",
+        "SOLO ciò che è stato formalmente deciso (approvato, scelto, confermato). Non riassumere la discussione. Può essere vuoto.",
     },
     tasks: {
       type: "array",
-      description: "Solo azioni concrete assegnabili emerse dalla riunione. Nessun task inventato.",
+      description: "Azioni assegnate: solo azioni concrete emerse dalla riunione, con responsabile e scadenza se dette. Nessun task inventato.",
       items: {
         type: "object",
         properties: {
@@ -59,12 +87,41 @@ export const MINUTES_SCHEMA = {
         additionalProperties: false,
       },
     },
+    nextMeeting: {
+      type: "object",
+      description: "Prossimo appuntamento, solo se fissato nella riunione; altrimenti tutti i campi null.",
+      properties: {
+        date: nullableString("AAAA-MM-GG"),
+        time: nullableString("HH:MM"),
+        subject: nullableString("Oggetto del prossimo incontro."),
+      },
+      required: ["date", "time", "subject"],
+      additionalProperties: false,
+    },
   },
-  required: ["minutes", "tasks"],
+  required: ["meetingType", "startTime", "estimatedDurationMin", "participants", "speaker", "agenda", "decisions", "tasks", "nextMeeting"],
 };
 
+const text = (max: number) =>
+  z
+    .string()
+    .nullish()
+    .transform((v) => v?.trim().slice(0, max) || null);
+const minutesNumber = z
+  .number()
+  .nullish()
+  .transform((v) => (v && v > 0 && v < 24 * 60 ? Math.round(v) : null));
+
 const rawOutputSchema = z.object({
-  minutes: z.string().min(1),
+  meetingType: text(120),
+  startTime: text(5),
+  estimatedDurationMin: minutesNumber,
+  participants: z.array(z.string()).default([]),
+  speaker: text(120),
+  agenda: z
+    .array(z.object({ title: z.string(), estimatedMinutes: minutesNumber, summary: z.string().default("") }))
+    .min(1),
+  decisions: z.array(z.string()).default([]),
   tasks: z
     .array(
       z.object({
@@ -78,6 +135,9 @@ const rawOutputSchema = z.object({
       }),
     )
     .default([]),
+  nextMeeting: z
+    .object({ date: text(10), time: text(5), subject: text(200) })
+    .nullish(),
 });
 
 export function romeToday(now: Date = new Date()): { iso: string; label: string } {
@@ -88,12 +148,20 @@ export function romeToday(now: Date = new Date()): { iso: string; label: string 
 }
 
 export const SYSTEM_PROMPT = `Sei l'assistente di un'agenzia italiana che lavora a progetto (eventi, video, comunicazione).
-Ricevi la trascrizione di una riunione e scrivi un verbale fedele, poi elenchi i task concreti.
+Ricevi la trascrizione di una riunione e compili il modello di verbale dell'agenzia: dati della riunione,
+ordine del giorno con la sintesi di ogni punto, decisioni prese, azioni assegnate, prossimo appuntamento.
 Regole:
 - Scrivi in italiano, tono professionale e asciutto.
 - Non inventare: se un nome, una data o un progetto non sono chiari, lascia null.
 - Un task è un'azione con un responsabile possibile; opinioni e discussioni non sono task.
 - Le voci della trascrizione («Voce 1», «Voce 2») non sono nomi: identifica le persone da come si chiamano tra loro.
+- I tempi tra parentesi ([03:10]) sono minuti dall'inizio della registrazione, non ore del giorno:
+  servono per stimare le durate, mai per l'orario della riunione.
+- «Decisioni prese» contiene solo ciò che è stato formalmente deciso: approvato, scelto, confermato.
+  Proposte, opinioni e cose solo discusse vanno nella sintesi del punto, non tra le decisioni.
+  Se non è stato deciso nulla, lascia l'elenco vuoto.
+  Il prossimo appuntamento va solo nel suo campo, non tra le decisioni.
+- Ogni azione assegnata diventa un task: solo azioni concrete, con il responsabile se è stato indicato.
 - Usa solo gli id presenti negli elenchi forniti.`;
 
 export function buildPrompt(input: {
@@ -128,13 +196,74 @@ export function buildPrompt(input: {
     .join("\n");
 }
 
+export type MinutesMeta = {
+  heldAt: Date;
+  /** Durata misurata (Deepgram o servizio esterno): vince sulla stima dell'AI */
+  durationSec: number | null;
+  /** Chi ha scritto il verbale: OCRA, per conto di chi l'ha avviato */
+  verbalizer: string;
+};
+
+type RawOutput = z.infer<typeof rawOutputSchema>;
+
+const dayLabel = (iso: string) => {
+  const d = new Date(`${iso}T12:00:00Z`);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Rome" });
+};
+const time = (v: string | null) => (v && /^\d{1,2}[:.]\d{2}$/.test(v) ? v.replace(".", ":") : null);
+const clean = (v: string) => v.replace(/\s+/g, " ").trim();
+
+/** Il verbale nel formato del modello «Sc. Verbali Riunioni», sempre con le stesse sezioni. */
+export function renderMinutes(out: RawOutput, proposals: Proposal[], people: Person[], meta: MinutesMeta): string {
+  const names = new Map(people.map((p) => [p.id, p.name]));
+  const durationMin = meta.durationSec ? Math.max(1, Math.round(meta.durationSec / 60)) : out.estimatedDurationMin;
+  const lines: string[] = [
+    "## Riunione",
+    `- **Data:** ${dayLabel(meta.heldAt.toISOString().slice(0, 10))}`,
+    `- **Orario:** ${time(out.startTime) ?? "—"}`,
+    `- **Tipo di riunione:** ${out.meetingType ?? "—"}`,
+    `- **Durata:** ${durationMin ? `${durationMin} min${meta.durationSec ? "" : " (stimata)"}` : "—"}`,
+    `- **Partecipanti:** ${out.participants.map(clean).filter(Boolean).join(", ") || "—"}`,
+    `- **Oratore:** ${out.speaker ?? "—"}`,
+    `- **Verbalizzatore:** ${meta.verbalizer}`,
+    "",
+    "## Ordine del giorno",
+    ...out.agenda.map((a, i) => `- **${i + 1}. ${clean(a.title)}**${a.estimatedMinutes ? ` · ${a.estimatedMinutes} min` : ""}`),
+    "",
+    "## Sintesi della discussione",
+    ...out.agenda.flatMap((a, i) => [`**${i + 1}. ${clean(a.title)}**`, clean(a.summary) || "—"]),
+    "",
+    "## Decisioni prese",
+    ...out.decisions.map(clean).filter(Boolean).map((d) => `- ${d}`),
+  ];
+  if (!out.decisions.some((d) => d.trim())) lines.push("Nessuna decisione formale.");
+  lines.push("", "## Azioni assegnate");
+  if (proposals.length === 0) lines.push("Nessuna azione assegnata.");
+  for (const p of proposals) {
+    const who = (p.assigneeId && names.get(p.assigneeId)) || p.assigneeMention || "da assegnare";
+    const due = p.dueDate ? dayLabel(p.dueDate) : "senza scadenza";
+    lines.push(`- **${p.title}** — ${who} — ${due}`);
+  }
+  const next = out.nextMeeting;
+  lines.push("", "## Prossimo appuntamento");
+  if (next && (next.date || next.time || next.subject)) {
+    const when = [next.date && /^\d{4}-\d{2}-\d{2}$/.test(next.date) ? dayLabel(next.date) : null, time(next.time)].filter(Boolean).join(", ore ");
+    lines.push(`${when || "Data da definire"}${next.subject ? ` — ${next.subject}` : ""}`);
+  } else {
+    lines.push("Non fissato.");
+  }
+  return lines.join("\n");
+}
+
 /**
  * Valida la risposta di Claude e la rende sicura: id sconosciuti → null,
- * date impossibili → null, priorità sconosciute → NORMALE.
+ * date impossibili → null, priorità sconosciute → NORMALE. Poi compone il verbale.
  */
 export function normalizeOutput(
   raw: unknown,
-  ctx: { people: Person[]; projects: ProjectRef[]; defaultProjectId: string | null },
+  ctx: { people: Person[]; projects: ProjectRef[]; defaultProjectId: string | null; meta: MinutesMeta },
 ): { minutes: string; proposals: Proposal[] } {
   const parsed = rawOutputSchema.parse(raw);
   const people = new Set(ctx.people.map((p) => p.id));
@@ -157,5 +286,5 @@ export function normalizeOutput(
         evidence: t.evidence?.trim().slice(0, 400) || null,
       }),
     );
-  return { minutes: parsed.minutes.trim(), proposals };
+  return { minutes: renderMinutes(parsed, proposals, ctx.people, ctx.meta), proposals };
 }

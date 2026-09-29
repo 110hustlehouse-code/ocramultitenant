@@ -59,7 +59,7 @@ describe("corpo del webhook", () => {
       day: "2026-09-29",
       projectCode: "FL/01",
       durationSec: 1800,
-      transcript: "[00:05] Erika: Marco, il montaggio entro venerdì. Senza scuse.\n[1:02:05] Marco: Va bene, lo consegno giovedì sera.",
+      transcript: "Orario di inizio: 12:00\n\n[00:05] Erika: Marco, il montaggio entro venerdì. Senza scuse.\n[1:02:05] Marco: Va bene, lo consegno giovedì sera.",
     });
   });
 
