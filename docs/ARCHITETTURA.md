@@ -8,8 +8,14 @@ Tenant  (cliente OCRA, es. Gruppo Masini)
  ├─ domain            es. ocra.fulcrolucem.it
  ├─ Company[]         società: branding (colori, logo) + dati giuridici (P.IVA, PEC, SDI, REA, legale rapp., prefisso PO)
  ├─ User[]            persone (nessun ruolo qui)
- └─ Membership[]      (utente, società) → role = CEO | PROJECT_MANAGER | CREATIVE | EXTERNAL
+ ├─ Membership[]      (utente, società) → role = CEO | PROJECT_MANAGER | CREATIVE | EXTERNAL
+ └─ Party[]           anagrafiche: kind = CLIENTE | FORNITORE, collegate alle società via PartyCompany
 ```
+
+**Anagrafiche.** Un cliente/fornitore è unico nel gruppo (P.IVA, poi CF, poi nome) e si collega
+a una o più società. Ognuno vede quelle delle società che guarda; modifiche ed eliminazioni toccano
+solo i collegamenti alle società dove l'utente può scrivere. Import CSV: tutto o niente, colonne
+riconosciute dal nome (`src/server/registry/csv.ts`).
 
 **Il ruolo vale in una società.** Decisione del 23 settembre: c'è un PM per società
 (Erika per Fulcro, Miele per St'Art, Giammarco per Duit) ed Erika è CEOO solo di Fulcro e St'Art.

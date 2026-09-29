@@ -16,12 +16,21 @@ export type ModuleDefinition = {
 /** Registro dei moduli. L'attivazione per cliente sta nel DB (Tenant.modules). */
 export const MODULES: readonly ModuleDefinition[] = [
   {
+    key: "ANAGRAFICHE",
+    label: "Clienti e fornitori",
+    href: "/anagrafiche",
+    permission: "registry:read",
+    summary: "Anagrafica unica di clienti e fornitori, per società. Import da CSV.",
+    step: 2,
+    ready: true,
+  },
+  {
     key: "PROGETTI",
     label: "Progetti e task",
     href: "/progetti",
     permission: "projects:read",
     summary: "Progetti con modelli configurabili per società, task con chiusura tramite prova.",
-    step: 2,
+    step: 3,
     ready: false,
   },
   {
@@ -30,7 +39,7 @@ export const MODULES: readonly ModuleDefinition[] = [
     href: "/verbali",
     permission: "meetings:read",
     summary: "Dal verbale della riunione ai task, con responsabile e scadenza estratti dall'AI.",
-    step: 3,
+    step: 4,
     ready: false,
   },
   {
@@ -39,7 +48,7 @@ export const MODULES: readonly ModuleDefinition[] = [
     href: "/richiami",
     permission: "reminders:read",
     summary: "Richiamo che insiste ma non blocca. Escalation al PM e poi al CEO.",
-    step: 4,
+    step: 5,
     ready: false,
   },
   {
@@ -48,7 +57,7 @@ export const MODULES: readonly ModuleDefinition[] = [
     href: "/documenti",
     permission: "documents:read",
     summary: "File di progetto e prove di chiusura dei task.",
-    step: 5,
+    step: 6,
     ready: false,
   },
   {
@@ -57,7 +66,7 @@ export const MODULES: readonly ModuleDefinition[] = [
     href: "/margine",
     permission: "finance:read",
     summary: "Ore e costi contro preventivo, in continuo. Allerta mentre il progetto è recuperabile.",
-    step: 6,
+    step: 7,
     ready: false,
   },
   {
@@ -66,7 +75,7 @@ export const MODULES: readonly ModuleDefinition[] = [
     href: "/preventivi",
     permission: "quotes:write",
     summary: "Preventivi con layout e tono della società. Accettato → progetto creato in automatico.",
-    step: 7,
+    step: 8,
     ready: false,
   },
 ];

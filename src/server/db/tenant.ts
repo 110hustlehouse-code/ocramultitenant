@@ -14,7 +14,7 @@ import { Prisma } from "@/generated/prisma/client";
  *    scrivi ogni modello con una chiamata di primo livello;
  *  • $queryRaw / $executeRaw non sono filtrati: filtra a mano e con cura.
  */
-export const TENANT_MODELS = new Set<string>(["Company", "User", "Membership"]);
+export const TENANT_MODELS = new Set<string>(["Company", "User", "Membership", "Party", "PartyCompany"]);
 
 type Args = Record<string, unknown>;
 

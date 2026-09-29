@@ -1,10 +1,11 @@
 /**
  * Dati iniziali — idempotente: si può rilanciare senza duplicare nulla.
- * Primo tenant: il gruppo di Daniele Masini (Fulcro Lucem, Duit, St'Art Factory).
+ * Tenant 1: il gruppo di Daniele Masini (Fulcro Lucem, Duit, St'Art Factory).
+ * Tenant 2: «Aurora», agenzia inventata per le demo di vendita (ocragency.shop).
  */
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, type Role } from "../src/generated/prisma/client";
+import { PrismaClient, type ModuleKey, type Role } from "../src/generated/prisma/client";
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL mancante");
@@ -13,15 +14,17 @@ const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url 
 
 const DAY = 24 * 60 * 60 * 1000;
 
+const MODULES: ModuleKey[] = ["ANAGRAFICHE", "PROGETTI", "VERBALI", "RICHIAMO", "DOCUMENTI", "MARGINE", "PREVENTIVI"];
+
 async function main() {
   const tenant = await prisma.tenant.upsert({
     where: { slug: "masini" },
-    update: {},
+    update: { modules: MODULES },
     create: {
       slug: "masini",
       name: "Gruppo Masini",
       domain: "ocra.fulcrolucem.it",
-      modules: ["PROGETTI", "VERBALI", "RICHIAMO", "DOCUMENTI", "MARGINE", "PREVENTIVI"],
+      modules: MODULES,
     },
   });
 
@@ -132,7 +135,86 @@ async function main() {
   console.log(`✓ Seed completato: tenant "${tenant.name}", ${companies.length} società, ${users.length} utenti.`);
 }
 
+/**
+ * Demo di vendita: stesso prodotto, dati inventati. Nomi e referenti sono di fantasia;
+ * le P.IVA restano vuote per non mostrare per sbaglio numeri di aziende reali.
+ */
+async function seedDemo() {
+  const tenant = await prisma.tenant.upsert({
+    where: { slug: "demo" },
+    update: { modules: MODULES },
+    create: { slug: "demo", name: "Aurora (demo)", domain: "ocragency.shop", modules: MODULES },
+  });
+
+  const companies = [
+    { slug: "aurora-studio", name: "Aurora Studio", legalName: "Aurora Studio S.r.l.", poPrefix: "AS", colorLight: "#6D28D9", colorDark: "#A78BFA", sortOrder: 1 },
+    { slug: "aurora-produzioni", name: "Aurora Produzioni", legalName: "Aurora Produzioni S.r.l.", poPrefix: "AP", colorLight: "#C2410C", colorDark: "#FB923C", sortOrder: 2 },
+    { slug: "aurora-music", name: "Aurora Music", legalName: "Aurora Music S.r.l.", poPrefix: "AM", colorLight: "#0E7490", colorDark: "#22D3EE", sortOrder: 3 },
+  ];
+  const ids = new Map<string, string>();
+  for (const c of companies) {
+    const row = await prisma.company.upsert({
+      where: { tenantId_slug: { tenantId: tenant.id, slug: c.slug } },
+      update: c,
+      create: { ...c, tenantId: tenant.id },
+    });
+    ids.set(c.poPrefix, row.id);
+  }
+
+  const users: Array<{ email: string; name: string; role: Role }> = [
+    { email: "ceo@demo.ocra.local", name: "Giulia Ferri", role: "CEO" },
+    { email: "pm@demo.ocra.local", name: "Luca Moretti", role: "PROJECT_MANAGER" },
+    { email: "creativo@demo.ocra.local", name: "Sara Conti", role: "CREATIVE" },
+  ];
+  for (const u of users) {
+    const user = await prisma.user.upsert({
+      where: { tenantId_email: { tenantId: tenant.id, email: u.email } },
+      update: { name: u.name, active: true },
+      create: { tenantId: tenant.id, email: u.email, name: u.name },
+    });
+    for (const companyId of ids.values()) {
+      await prisma.membership.upsert({
+        where: { userId_companyId: { userId: user.id, companyId } },
+        update: { role: u.role },
+        create: { tenantId: tenant.id, userId: user.id, companyId, role: u.role },
+      });
+    }
+  }
+
+  type DemoParty = { name: string; contact: string; email: string; cats: string[]; at: string[] };
+  const clients: DemoParty[] = [
+    { name: "Fondazione Teatro Nuovo", contact: "Elena Galli", email: "eventi@teatronuovo.example", cats: ["Cultura", "Eventi"], at: ["AS", "AP"] },
+    { name: "Birrificio Monteverde", contact: "Paolo Riva", email: "marketing@birrificio.example", cats: ["Food & beverage"], at: ["AS"] },
+    { name: "Comune di Valleverde", contact: "Ufficio Cultura", email: "cultura@valleverde.example", cats: ["Pubblica amministrazione"], at: ["AP"] },
+    { name: "Nora Vale", contact: "Nora Vale", email: "nora@noravale.example", cats: ["Artista"], at: ["AM"] },
+    { name: "Atelier Sartori", contact: "Marta Sartori", email: "marta@ateliersartori.example", cats: ["Moda"], at: ["AS"] },
+    { name: "Festival Luci d'Estate", contact: "Davide Bassi", email: "info@lucidestate.example", cats: ["Eventi", "Musica"], at: ["AP", "AM"] },
+  ];
+  const suppliers: DemoParty[] = [
+    { name: "Service Audio Luci Roma", contact: "Franco Leoni", email: "preventivi@servicealr.example", cats: ["Service", "Noleggi"], at: ["AP"] },
+    { name: "Tipografia Rapida", contact: "Silvia Neri", email: "ordini@tiporapida.example", cats: ["Stampa"], at: ["AS", "AP"] },
+    { name: "Marco Villa", contact: "Marco Villa", email: "marco@villavideo.example", cats: ["Videomaker"], at: ["AP"] },
+    { name: "Studio Grafico Linea", contact: "Irene Fabbri", email: "irene@linea.example", cats: ["Grafica"], at: ["AS"] },
+    { name: "Catering Tavola Viva", contact: "Rosa Greco", email: "eventi@tavolaviva.example", cats: ["Catering"], at: ["AP"] },
+  ];
+  for (const [kind, list] of [["CLIENTE", clients], ["FORNITORE", suppliers]] as const) {
+    for (const p of list) {
+      const existing = await prisma.party.findFirst({ where: { tenantId: tenant.id, kind, name: p.name } });
+      const data = { name: p.name, contactName: p.contact, email: p.email, categories: p.cats };
+      const party = existing
+        ? await prisma.party.update({ where: { id: existing.id }, data })
+        : await prisma.party.create({ data: { ...data, kind, tenantId: tenant.id } });
+      await prisma.partyCompany.createMany({
+        data: p.at.map((prefix) => ({ tenantId: tenant.id, partyId: party.id, companyId: ids.get(prefix)! })),
+        skipDuplicates: true,
+      });
+    }
+  }
+  console.log(`✓ Demo: tenant "${tenant.name}", ${clients.length} clienti, ${suppliers.length} fornitori.`);
+}
+
 main()
+  .then(seedDemo)
   .catch((e) => {
     console.error(e);
     process.exit(1);

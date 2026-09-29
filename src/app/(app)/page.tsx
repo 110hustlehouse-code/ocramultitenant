@@ -40,7 +40,7 @@ export default async function OverviewPage() {
             <h2 id="margin-title" className="font-[family-name:var(--font-display)] text-lg font-semibold">
               Margine a rischio
             </h2>
-            <span className="label">passo 6</span>
+            <span className="label">in arrivo</span>
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             {[
