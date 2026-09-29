@@ -10,8 +10,8 @@ Ogni modulo alimenta quello dopo. Non si salta un passo.
 | 3b | (modello di progetto per società) | | Fasi e campi personalizzati, se serve |
 | 4 | Verbali AI → estrazione dei task | ✅ fatto | Registra/carica/incolla → Deepgram → Claude → il PM conferma i task |
 | 4b | Verbali: riunioni da servizi esterni | ✅ fatto (29 set) | Webhook con token per collegamento (`/verbali/collegamenti`); fonte della riunione registrata; stesso flusso a valle. Fireflies tramite ponte n8n (decisione 29 set, `docs/integrazioni/FIREFLIES.md`); Deepgram resta per l'ascolto in app |
-| 5b | Solleciti ai clienti | 📝 piano da approvare | Task «in attesa del cliente» → email al cliente, promemoria dopo N giorni di silenzio, vista per PM/CEO dei progetti fermi per causa esterna |
 | 5 | Richiamo ed escalation | ✅ fatto (29 set) | Email (Gmail Workspace, decisione 23 set), poi web push. Collaboratore → PM → CEO, solo persone interne (nessun richiamo verso i clienti); il blocco lo decidono PM o CEO |
+| 5b | Solleciti ai clienti | ✅ fatto (29 set) | Voce di menu separata dai Richiami. Il collaboratore o il PM avvia «In attesa del cliente» → email al cliente in prima persona; promemoria ogni 3 giorni lavorativi (max 2) nello stesso thread, poi avviso al PM. Richiami interni in pausa. Giorni fermi per il cliente per progetto → Margine. Piano: `docs/piani/SOLLECITI.md` |
 | 6 | Documenti | | File di progetto e prove |
 | 7 | Margine in tempo reale e consolidato | ⏳ prossimo (priorità 2 di Daniele) | Il modulo che vale di più in vendita. Solo per il CEO |
 | 8 | Preventivi e creazione automatica del progetto | | Preventivo accettato → progetto, cartella Drive, board (n8n) |

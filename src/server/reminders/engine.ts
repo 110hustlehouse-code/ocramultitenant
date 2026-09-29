@@ -37,7 +37,7 @@ export function taskMail(t: TaskWithContext, base: string, now = new Date()): Ta
  * Chi gestisce i task scaduti di un progetto: il PM del progetto se ha ancora il ruolo,
  * altrimenti i PM della società, altrimenti i CEO.
  */
-export async function managersFor(db: TenantDb, t: TaskWithContext): Promise<User[]> {
+export async function managersFor(db: TenantDb, t: { project: { companyId: string; managerId: string | null } }): Promise<User[]> {
   const members = await db.membership.findMany({
     where: { companyId: t.project.companyId, role: { in: ["PROJECT_MANAGER", "CEO"] }, user: { active: true } },
     include: { user: true },
@@ -77,6 +77,8 @@ export async function runReminders(now = new Date(), send: EmailSender = sendEma
         assigneeId: { not: null },
         dueDate: { lte: new Date(`${day}T23:59:59.999Z`) },
         blockerNote: null,
+        // In attesa del cliente (sollecito attivo): il ritardo non è del collaboratore
+        followUps: { none: { status: "ATTIVO" } },
         escalation: { lt: 3 },
         project: { status: "ATTIVO" },
       },

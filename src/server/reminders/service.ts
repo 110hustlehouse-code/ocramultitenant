@@ -46,7 +46,7 @@ function assertManage(ctx: AppContext, companyId: string) {
   if (!canIn(ctx, companyId, "reminders:manage")) throw new ReminderError("Non puoi gestire i richiami di questa società.");
 }
 
-/** Sollecito manuale del PM (livello 3 del flusso). */
+/** Richiamo manuale del PM al collaboratore (livello 3). Non è un sollecito al cliente. */
 export async function nudge(ctx: AppContext, taskId: string, message: string | null, send: EmailSender = sendEmail) {
   const task = await loadTask(ctx, taskId);
   assertManage(ctx, task.project.companyId);

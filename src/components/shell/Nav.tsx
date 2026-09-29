@@ -8,6 +8,7 @@ import {
   NotebookPen,
   Receipt,
   BellRing,
+  Hourglass,
   TrendingUp,
   Users,
 } from "lucide-react";
@@ -22,6 +23,7 @@ const ICONS: Record<ModuleKey | "HOME", LucideIcon> = {
   PROGETTI: FolderKanban,
   VERBALI: NotebookPen,
   RICHIAMO: BellRing,
+  SOLLECITI: Hourglass,
   DOCUMENTI: FileText,
   MARGINE: TrendingUp,
   PREVENTIVI: Receipt,

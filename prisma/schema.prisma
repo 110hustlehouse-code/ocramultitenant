@@ -30,6 +30,7 @@ enum ModuleKey {
   PROGETTI
   VERBALI
   RICHIAMO
+  SOLLECITI
   DOCUMENTI
   MARGINE
   PREVENTIVI
@@ -56,6 +57,8 @@ model Tenant {
   tasks               Task[]
   meetings            Meeting[]
   meetingIntegrations MeetingIntegration[]
+  clientFollowUps     ClientFollowUp[]
+  clientMessages      ClientMessage[]
   reminders           Reminder[]
   accountBlocks       AccountBlock[]
 }
@@ -121,6 +124,9 @@ model User {
   completedTasks      Task[]               @relation("TaskCompletedBy")
   meetings            Meeting[]
   meetingIntegrations MeetingIntegration[]
+  followUpsStarted    ClientFollowUp[]     @relation("FollowUpStartedBy")
+  followUpsResolved   ClientFollowUp[]     @relation("FollowUpResolvedBy")
+  clientMessagesSent  ClientMessage[]
   reminders           Reminder[]           @relation("ReminderRecipient")
   blocks              AccountBlock[]       @relation("BlockedUser")
   blocksIssued        AccountBlock[]       @relation("BlockedBy")
@@ -179,9 +185,10 @@ model Party {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   companies PartyCompany[]
   projects  Project[]
+  followUps ClientFollowUp[]
 
   @@unique([tenantId, kind, vatNumber])
   @@index([tenantId, kind])
@@ -257,6 +264,7 @@ model Project {
   tasks               Task[]
   meetings            Meeting[]
   meetingIntegrations MeetingIntegration[]
+  followUps           ClientFollowUp[]
 
   @@unique([tenantId, code])
   @@index([tenantId, companyId, status])
@@ -305,13 +313,14 @@ model Task {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignee    User?          @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  completedBy User?          @relation("TaskCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
-  meeting     Meeting?       @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee    User?            @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  completedBy User?            @relation("TaskCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+  meeting     Meeting?         @relation(fields: [meetingId], references: [id], onDelete: SetNull)
   reminders   Reminder[]
   blocks      AccountBlock[]
+  followUps   ClientFollowUp[]
 
   @@index([tenantId, projectId])
   @@index([meetingId])
@@ -422,7 +431,7 @@ enum ReminderKind {
   AUTOMATICO
   /// Il task passa al PM (livello 3)
   AL_PM
-  /// Sollecito manuale del PM
+  /// Richiamo manuale del PM al collaboratore (in UI «Richiamo del PM»; non è un sollecito al cliente)
   SOLLECITO
   /// Passato al CEO (livello 4)
   AL_CEO
@@ -471,4 +480,87 @@ model AccountBlock {
 
   @@index([tenantId, userId, releasedAt])
   @@index([taskId])
+}
+
+enum FollowUpStatus {
+  /// Si aspetta il cliente
+  ATTIVO
+  /// Il cliente ha risposto o consegnato (o il task è stato chiuso)
+  RISOLTO
+  /// Aperto per errore o non più necessario
+  ANNULLATO
+}
+
+enum ClientMessageKind {
+  PRIMO
+  PROMEMORIA
+}
+
+/// Sollecito: un task è fermo in attesa di un cliente esterno. Lo avvia una persona, mai il sistema;
+/// il sistema manda solo i promemoria dopo N giorni lavorativi di silenzio (docs/piani/SOLLECITI.md).
+model ClientFollowUp {
+  id                String         @id @default(cuid())
+  tenantId          String
+  taskId            String
+  /// Ridondante con task.projectId: la vista per progetto e il margine non passano dal task
+  projectId         String
+  partyId           String?
+  /// Referente al momento dell'avvio: se l'anagrafica cambia, il thread resta coerente
+  contactName       String?
+  contactEmail      String
+  /// Cosa si aspetta dal cliente, scritto da chi lo avvia
+  waitingFor        String
+  status            FollowUpStatus @default(ATTIVO)
+  startedById       String
+  startedAt         DateTime       @default(now())
+  /// Promemoria automatici: ogni quanti giorni lavorativi, fino a quanti
+  everyWorkdays     Int            @default(3)
+  maxReminders      Int            @default(2)
+  remindersSent     Int            @default(0)
+  /// Prossimo promemoria; null = nessuno in programma
+  nextReminderAt    DateTime?
+  /// Tetto raggiunto: il PM è stato avvisato (una volta sola)
+  managerNotifiedAt DateTime?
+  resolvedAt        DateTime?
+  resolvedById      String?
+  resolutionNote    String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  task       Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  party      Party?          @relation(fields: [partyId], references: [id], onDelete: SetNull)
+  startedBy  User            @relation("FollowUpStartedBy", fields: [startedById], references: [id], onDelete: Cascade)
+  resolvedBy User?           @relation("FollowUpResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+  messages   ClientMessage[]
+
+  @@index([tenantId, status, nextReminderAt])
+  @@index([projectId, status])
+  @@index([taskId])
+}
+
+/// Ogni messaggio inviato al cliente, con il testo esatto.
+model ClientMessage {
+  id         String            @id @default(cuid())
+  tenantId   String
+  followUpId String
+  kind       ClientMessageKind
+  channel    ReminderChannel   @default(EMAIL)
+  to         String
+  subject    String
+  body       String
+  /// Message-ID dell'email: i promemoria rispondono nello stesso thread
+  messageId  String?
+  /// null = promemoria automatico
+  sentById   String?
+  delivered  Boolean           @default(false)
+  error      String?
+  createdAt  DateTime          @default(now())
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  followUp ClientFollowUp @relation(fields: [followUpId], references: [id], onDelete: Cascade)
+  sentBy   User?          @relation(fields: [sentById], references: [id], onDelete: SetNull)
+
+  @@index([followUpId])
 }

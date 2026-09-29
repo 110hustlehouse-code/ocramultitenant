@@ -44,8 +44,8 @@ export async function nudgeAction(_prev: Result, fd: FormData): Promise<Result> 
   let delivered = false;
   const res = await run(async () => {
     delivered = await nudge(c, String(fd.get("taskId")), fd.get("message")?.toString() ?? null);
-  }, "Sollecito inviato.");
-  return res?.ok && !delivered ? { ok: "Sollecito registrato (email non configurata)." } : res;
+  }, "Richiamo inviato.");
+  return res?.ok && !delivered ? { ok: "Richiamo registrato (email non configurata)." } : res;
 }
 
 export async function escalateAction(fd: FormData): Promise<void> {
