@@ -1,7 +1,7 @@
 import type { Role } from "@/generated/prisma/enums";
 
 /**
- * Ruolo = cosa puoi fare. La società NON sta qui: si sceglie in UI.
+ * Ruolo = cosa puoi fare in una società (il ruolo sta su Membership, non sull'utente).
  * Aggiungi permessi quando nasce un modulo, mai controlli sul ruolo sparsi nel codice.
  */
 export const PERMISSIONS = [
@@ -31,6 +31,8 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "meetings:write",
     "reminders:read",
     "documents:read",
+    // Decisione 16 set: il PM può bloccare un account fino alla consegna.
+    "hardblock:manage",
   ],
   CREATIVE: ["projects:read", "reminders:read", "documents:read"],
   EXTERNAL: ["projects:read", "documents:read"],
@@ -48,15 +50,21 @@ export const ROLE_LABELS: Record<Role, string> = {
 };
 
 type AccessSubject = {
-  role: Role;
   active: boolean;
   accessExpiresAt: Date | null;
+  /** Ruoli dell'utente nelle società a cui ha accesso (uno per Membership). */
+  roles: readonly Role[];
 };
 
-/** Un utente può entrare? Gli esterni devono SEMPRE avere una scadenza. */
+/**
+ * Un utente può entrare?
+ * • serve almeno una società accessibile
+ * • chi è solo esterno deve SEMPRE avere una scadenza
+ */
 export function hasValidAccess(user: AccessSubject, now: Date = new Date()): boolean {
   if (!user.active) return false;
-  if (user.role === "EXTERNAL" && !user.accessExpiresAt) return false;
+  if (user.roles.length === 0) return false;
+  if (user.roles.every((r) => r === "EXTERNAL") && !user.accessExpiresAt) return false;
   if (user.accessExpiresAt && user.accessExpiresAt.getTime() <= now.getTime()) return false;
   return true;
 }

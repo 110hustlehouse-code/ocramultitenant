@@ -11,7 +11,7 @@ export async function selectCompany(formData: FormData): Promise<void> {
   const slug = String(formData.get("company") ?? "");
 
   const allowed =
-    (slug === ALL_COMPANIES && ctx.can("company:consolidated")) ||
+    (slug === ALL_COMPANIES && ctx.canConsolidate) ||
     ctx.companies.some((c) => c.slug === slug);
   if (!allowed) return;
 

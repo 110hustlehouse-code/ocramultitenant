@@ -8,7 +8,8 @@ export const metadata: Metadata = { title: "Panoramica" };
 
 export default async function OverviewPage() {
   const ctx = await getContext();
-  const scope = ctx.view.kind === "all" ? "Tutte le società" : ctx.view.company.name;
+  const scope =
+    ctx.view.kind === "all" ? ctx.view.companies.map((c) => c.name).join(" · ") : ctx.view.company.name;
   const firstName = ctx.user.name.split(" ")[0];
 
   return (
@@ -19,7 +20,16 @@ export default async function OverviewPage() {
           Ciao {firstName}
         </h1>
         <p className="text-muted">
-          Accesso come <strong className="text-text">{ROLE_LABELS[ctx.user.role]}</strong> · {ctx.tenant.name}
+          {ctx.role ? (
+            <>
+              Accesso come <strong className="text-text">{ROLE_LABELS[ctx.role]}</strong> in {scope}
+            </>
+          ) : (
+            <>
+              <strong className="text-text">Vista consolidata</strong>
+            </>
+          )}{" "}
+          · {ctx.tenant.name}
         </p>
       </header>
 
