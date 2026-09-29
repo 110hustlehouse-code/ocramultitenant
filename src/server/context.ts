@@ -45,6 +45,11 @@ export const getContext = cache(async () => {
   const access: CompanyAccess[] = user.memberships.map((m) => ({ company: m.company, role: m.role }));
   if (!hasValidAccess({ ...user, roles: access.map((a) => a.role) })) redirect("/login?error=AccessDenied");
 
+  const blocks = await prisma.accountBlock.findMany({
+    where: { tenantId: user.tenantId, userId: user.id, releasedAt: null },
+    select: { id: true, taskId: true },
+  });
+
   const requested = (await cookies()).get(COMPANY_COOKIE)?.value;
   const view = resolveCompanyView(access, requested);
   if (!view) redirect("/login?error=AccessDenied");
@@ -64,6 +69,8 @@ export const getContext = cache(async () => {
     role: view.kind === "company" ? view.role : null,
     /** L'utente può aprire la vista «Tutte» (a prescindere da cosa guarda ora)? */
     canConsolidate: consolidatedCompanies(access).length > 0,
+    /** Blocchi attivi: se presenti, l'utente vede solo i task da consegnare. */
+    blockedTaskIds: blocks.map((b) => b.taskId),
     can: (permission: Permission) => canInView(view, access, permission),
     db: prisma.$extends(tenantExtension(user.tenantId)),
   };
@@ -87,4 +94,14 @@ export async function requirePermission(permission: Permission): Promise<AppCont
   const ctx = await getContext();
   if (!ctx.can(permission)) notFound();
   return ctx;
+}
+
+/**
+ * Account bloccato da PM/CEO: può solo consegnare i task del blocco (o segnalare un impedimento).
+ * Da chiamare in ogni Server Action che modifica dati.
+ */
+export function assertNotBlocked(ctx: AppContext): void {
+  if (ctx.blockedTaskIds.length > 0) {
+    throw new Error("Account limitato: consegna prima il task indicato.");
+  }
 }

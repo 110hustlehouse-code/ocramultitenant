@@ -1,5 +1,6 @@
 import { LogOut } from "lucide-react";
 import { CompanySwitcher } from "@/components/shell/CompanySwitcher";
+import { BlockedScreen } from "@/components/reminders/BlockedScreen";
 import { brandStyle } from "@/components/shell/brand";
 import { Nav, type NavItem } from "@/components/shell/Nav";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -12,10 +13,13 @@ import { hasModuleAccess, getContext } from "@/server/context";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getContext();
 
-  const nav: NavItem[] = [
-    { key: "HOME", label: "Panoramica", href: "/" },
-    ...MODULES.filter((m) => hasModuleAccess(ctx, m.key)).map((m) => ({ key: m.key, label: m.label, href: m.href })),
-  ];
+  const blocked = ctx.blockedTaskIds.length > 0;
+  const nav: NavItem[] = blocked
+    ? []
+    : [
+        { key: "HOME", label: "Panoramica", href: "/" },
+        ...MODULES.filter((m) => hasModuleAccess(ctx, m.key)).map((m) => ({ key: m.key, label: m.label, href: m.href })),
+      ];
 
   const companies = ctx.companies.map(({ slug, name, logoUrl, logoBg, colorLight }) => ({
     slug,
@@ -87,7 +91,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Nav items={nav} orientation="horizontal" />
         </header>
 
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8 md:py-10">{children}</main>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8 md:py-10">
+          {blocked ? <BlockedScreen ctx={ctx} /> : children}
+        </main>
       </div>
     </div>
   );

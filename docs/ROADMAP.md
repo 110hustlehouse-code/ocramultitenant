@@ -9,9 +9,9 @@ Ogni modulo alimenta quello dopo. Non si salta un passo.
 | 3 | Progetti e task | ✅ fatto | Task si chiude solo con prova; «I tuoi task» in cima; collaboratori vedono solo i propri |
 | 3b | (modello di progetto per società) | | Fasi e campi personalizzati, se serve |
 | 4 | Verbali AI → estrazione dei task | ✅ fatto | Registra/carica/incolla → Deepgram → Claude → il PM conferma i task |
-| 5 | Richiamo ed escalation | ⏳ prossimo | Email (Gmail Workspace, decisione 23 set), poi web push. Escalation a PM e CEO; il blocco lo decidono PM o CEO |
+| 5 | Richiamo ed escalation | ✅ fatto | Email (Gmail Workspace, decisione 23 set), poi web push. Escalation a PM e CEO; il blocco lo decidono PM o CEO |
 | 6 | Documenti | | File di progetto e prove |
-| 7 | Margine in tempo reale e consolidato | | Il modulo che vale di più in vendita. Solo per il CEO |
+| 7 | Margine in tempo reale e consolidato | ⏳ prossimo (priorità 2 di Daniele) | Il modulo che vale di più in vendita. Solo per il CEO |
 | 8 | Preventivi e creazione automatica del progetto | | Preventivo accettato → progetto, cartella Drive, board (n8n) |
 
 ## Priorità dette da Daniele (23 set) — Fase 1

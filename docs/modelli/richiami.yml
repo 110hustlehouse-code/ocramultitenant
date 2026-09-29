@@ -1,0 +1,32 @@
+name: Richiami (ogni ora)
+
+# Chiama l'endpoint dei richiami una volta all'ora. Il motore decide da solo cosa inviare
+# in base all'ora di Roma (mattina, pomeriggio, giorno dopo). Serve perché il piano Hobby di
+# Vercel permette cron solo una volta al giorno. Con Vercel Pro o n8n si può spegnere questo.
+#
+# Secrets del repository (Settings → Secrets and variables → Actions):
+#   OCRA_URL     es. https://ocra.fulcrolucem.it
+#   CRON_SECRET  lo stesso valore della variabile CRON_SECRET su Vercel
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+jobs:
+  richiami:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Chiama /api/cron/richiami
+        env:
+          OCRA_URL: ${{ secrets.OCRA_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$OCRA_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "OCRA_URL o CRON_SECRET non impostati: salto."
+            exit 0
+          fi
+          curl --fail-with-body -sS --max-time 300 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$OCRA_URL/api/cron/richiami"

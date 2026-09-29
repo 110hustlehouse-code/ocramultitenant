@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { ProjectStatus } from "@/generated/prisma/enums";
-import { getContext } from "@/server/context";
+import { assertNotBlocked, getContext } from "@/server/context";
 import {
   projectFromFormData,
   projectInputSchema,
@@ -23,9 +23,10 @@ import {
 } from "@/server/projects/service";
 import { fieldErrors } from "@/server/registry/input";
 
-async function ctxWithModule() {
+async function ctxWithModule({ allowBlocked = false } = {}) {
   const ctx = await getContext();
   if (!ctx.tenant.modules.includes("PROGETTI")) throw new Error("Modulo non attivo");
+  if (!allowBlocked) assertNotBlocked(ctx);
   return ctx;
 }
 
@@ -84,14 +85,15 @@ export async function saveTaskAction(_prev: TaskFormState, fd: FormData): Promis
 export type CompleteState = { message?: string } | undefined;
 
 export async function completeTaskAction(_prev: CompleteState, fd: FormData): Promise<CompleteState> {
-  const ctx = await ctxWithModule();
+  // Chiudere un task è permesso anche con l'account bloccato: è il modo per sbloccarlo.
+  const ctx = await ctxWithModule({ allowBlocked: true });
   try {
     await completeTask(ctx, String(fd.get("taskId")), String(fd.get("proof") ?? ""));
   } catch (e) {
     if (e instanceof ProjectError) return { message: e.message };
     throw e;
   }
-  revalidatePath("/progetti", "layout");
+  revalidatePath("/", "layout");
   return undefined;
 }
 

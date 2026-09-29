@@ -22,6 +22,7 @@ export function testContext(
     view: v,
     role: v.kind === "company" ? v.role : null,
     canConsolidate: consolidatedCompanies(access).length > 0,
+    blockedTaskIds: [],
     can: (p) => canInView(v, access, p),
     db: prisma.$extends(tenantExtension(tenantId)),
   } as AppContext;

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getContext } from "@/server/context";
+import { assertNotBlocked, getContext } from "@/server/context";
 import { parsePartiesCsv, type ImportIssue } from "@/server/registry/csv";
 import { fieldErrors, kindFromParam, PARAM_BY_KIND, partyFromFormData, partyInputSchema } from "@/server/registry/input";
 import {
@@ -22,6 +22,7 @@ export type FormState =
 
 async function writer() {
   const ctx = await getContext();
+  assertNotBlocked(ctx);
   if (!ctx.tenant.modules.includes("ANAGRAFICHE") || writableCompanies(ctx).length === 0) {
     throw new Error("Permesso negato");
   }
