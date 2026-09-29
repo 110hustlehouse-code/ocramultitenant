@@ -12,6 +12,17 @@ const schema = z.object({
   AUTH_GOOGLE_ID: z.string().optional(),
   AUTH_GOOGLE_SECRET: z.string().optional(),
   AUTH_DEV_LOGIN: z.string().optional(),
+  // Verbali: Claude scrive il verbale ed estrae i task
+  ANTHROPIC_API_KEY: z.string().optional(),
+  ANTHROPIC_MODEL: z.string().default("claude-sonnet-5-5"),
+  // Trascrizione audio
+  DEEPGRAM_API_KEY: z.string().optional(),
+  DEEPGRAM_MODEL: z.string().default("nova-3"),
+  // Archivio file (Cloudflare R2, compatibile S3)
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_BUCKET: z.string().optional(),
 });
 
 export type ServerEnv = z.infer<typeof schema>;
@@ -42,4 +53,14 @@ export function isGoogleEnabled(): boolean {
 export function isDevLoginEnabled(): boolean {
   const e = env();
   return e.NODE_ENV !== "production" && e.AUTH_DEV_LOGIN === "true";
+}
+
+/** Integrazioni configurate: le pagine mostrano solo le funzioni che possono funzionare. */
+export function integrations() {
+  const e = env();
+  return {
+    ai: Boolean(e.ANTHROPIC_API_KEY),
+    transcription: Boolean(e.DEEPGRAM_API_KEY),
+    storage: Boolean(e.R2_ACCOUNT_ID && e.R2_ACCESS_KEY_ID && e.R2_SECRET_ACCESS_KEY && e.R2_BUCKET),
+  };
 }

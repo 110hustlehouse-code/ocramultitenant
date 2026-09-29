@@ -276,8 +276,58 @@ async function seedDemo() {
     }
   }
 
+  // Verbali demo: uno confermato e uno da rivedere, per mostrare il flusso anche senza chiavi AI.
+  const teatro = await prisma.project.findFirstOrThrow({ where: { tenantId: tenant.id, code: projects[0]!.code } });
+  const sartori = await prisma.project.findFirstOrThrow({ where: { tenantId: tenant.id, code: projects[1]!.code } });
+  await prisma.meeting.deleteMany({ where: { tenantId: tenant.id } });
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  await prisma.meeting.create({
+    data: {
+      tenantId: tenant.id,
+      companyId: sartori.companyId,
+      projectId: sartori.id,
+      title: "Allineamento rebranding Sartori",
+      heldAt: day(0),
+      durationSec: 1860,
+      createdById: people.get("pm"),
+      status: "DA_RIVEDERE",
+      transcript:
+        "[00:02] Voce 1: Allora, sul rebranding di Sartori siamo in ritardo sulle proposte logo.\n" +
+        "[00:15] Voce 2: Sara, le due proposte riesci a mandarle entro giovedì?\n" +
+        "[00:21] Voce 3: Sì, giovedì le carico sul Drive.\n" +
+        "[01:40] Voce 1: Luca, tu senti Marta Sartori per fissare la presentazione, meglio la settimana prossima.\n" +
+        "[02:05] Voce 2: E ci serve il preventivo della tipografia per il biglietto da visita, urgente.",
+      minutes:
+        "## Partecipanti\n- Giulia Ferri, Luca Moretti, Sara Conti\n\n## Punti discussi\n- Ritardo sulle proposte logo per Atelier Sartori\n- Presentazione al cliente\n- Stampa dei biglietti da visita\n\n## Decisioni\n- Le due proposte logo vanno consegnate entro giovedì\n- La presentazione a Marta Sartori si fissa la settimana prossima\n\n## Prossimi passi\n- Sara: proposte logo sul Drive\n- Luca: fissare la presentazione e chiedere il preventivo alla tipografia",
+      proposals: [
+        { key: "p0", title: "Caricare le 2 proposte logo sul Drive", assigneeId: people.get("creativo") ?? null, assigneeMention: "Sara", projectId: sartori.id, dueDate: iso(day(2)), priority: "ALTA", evidence: "giovedì le carico sul Drive" },
+        { key: "p1", title: "Fissare la presentazione con Marta Sartori", assigneeId: people.get("pm") ?? null, assigneeMention: "Luca", projectId: sartori.id, dueDate: iso(day(7)), priority: "NORMALE", evidence: "senti Marta Sartori per fissare la presentazione" },
+        { key: "p2", title: "Chiedere preventivo tipografia per biglietti da visita", assigneeId: null, assigneeMention: null, projectId: sartori.id, dueDate: null, priority: "URGENTE", evidence: "ci serve il preventivo della tipografia… urgente" },
+      ],
+    },
+  });
+  const confirmed = await prisma.meeting.create({
+    data: {
+      tenantId: tenant.id,
+      companyId: teatro.companyId,
+      projectId: teatro.id,
+      title: "Kick-off serata di apertura",
+      heldAt: day(-20),
+      durationSec: 2700,
+      createdById: people.get("pm"),
+      status: "CONFERMATO",
+      confirmedAt: day(-20),
+      minutes:
+        "## Partecipanti\n- Giulia Ferri, Luca Moretti, Sara Conti\n\n## Punti discussi\n- Formato della serata e tempi di allestimento\n- Materiali video per la promozione\n\n## Decisioni\n- Sopralluogo tecnico entro due settimane\n- Teaser video da 15 secondi per i social\n\n## Prossimi passi\n- Luca: sopralluogo e preventivo service\n- Sara: teaser video",
+    },
+  });
+  await prisma.task.updateMany({
+    where: { projectId: teatro.id, title: { in: ["Sopralluogo tecnico con il service", "Teaser video 15 secondi"] } },
+    data: { meetingId: confirmed.id, source: "VERBALE" },
+  });
+
   console.log(
-    `✓ Demo: tenant "${tenant.name}", ${clients.length} clienti, ${suppliers.length} fornitori, ${projects.length} progetti.`,
+    `✓ Demo: tenant "${tenant.name}", ${clients.length} clienti, ${suppliers.length} fornitori, ${projects.length} progetti, 2 verbali.`,
   );
 }
 

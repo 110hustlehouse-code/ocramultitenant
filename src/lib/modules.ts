@@ -40,7 +40,7 @@ export const MODULES: readonly ModuleDefinition[] = [
     permission: "meetings:read",
     summary: "Dal verbale della riunione ai task, con responsabile e scadenza estratti dall'AI.",
     step: 4,
-    ready: false,
+    ready: true,
   },
   {
     key: "RICHIAMO",
