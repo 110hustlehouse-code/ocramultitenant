@@ -1,19 +1,19 @@
 import type { NextConfig } from "next";
 
-// In Codespaces l'app è servita da <nome>-3000.app.github.dev:
-// senza questi permessi le Server Actions e l'HMR vengono rifiutati.
-// Calcoliamo l'host esatto (invece di affidarci al wildcard *.app.github.dev,
-// che in alcune versioni di Next.js non fa match correttamente).
+// In Codespaces l'app è servita da <nome>-<porta>.app.github.dev, ma il proxy di
+// Codespaces riscrive l'header Origin in "localhost:<porta>" mentre x-forwarded-host
+// resta il dominio pubblico: Next vede i due host diversi e rifiuta le Server Actions
+// (vercel/next.js#58019). Autorizziamo quindi sia il dominio pubblico sia localhost.
+// Solo in Codespaces: in produzione la lista resta vuota.
+// Porte: PORT se impostata, più 3000 e 3001 (Next ripiega sulla 3001 se la 3000 è occupata).
 const codespaceName = process.env.CODESPACE_NAME;
 const forwardingDomain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
+const ports = [...new Set([process.env.PORT, "3000", "3001"].filter(Boolean))];
 
 const codespaceOrigins =
   process.env.CODESPACES === "true" && codespaceName && forwardingDomain
-    ? [`${codespaceName}-3000.${forwardingDomain}`, "*.app.github.dev"]
+    ? ports.flatMap((port) => [`${codespaceName}-${port}.${forwardingDomain}`, `localhost:${port}`])
     : [];
-
-console.log("DEBUG codespaceOrigins:", codespaceOrigins);
-console.log("DEBUG env:", { CODESPACES: process.env.CODESPACES, codespaceName, forwardingDomain });
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: codespaceOrigins,
