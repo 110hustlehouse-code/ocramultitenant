@@ -47,6 +47,22 @@ browser
       → requireModule(key)  404 se il modulo è spento per il cliente o manca il permesso
 ```
 
+## Verbali: tre ingressi, un solo flusso
+
+```
+tasto «ascolto» / audio caricato ─→ R2 ─→ Deepgram ─┐
+testo incollato o .txt ──────────────────────────────┼─→ Meeting.transcript ─→ Claude ─→ task proposti ─→ conferma PM
+servizio esterno (webhook) ──────────────────────────┘
+```
+
+- `Meeting.source` (`REGISTRAZIONE | AUDIO | TESTO | WEBHOOK`) dice solo da dove è arrivata; dopo, `runProcessing` è uno.
+- **Webhook** `POST /api/webhooks/verbali`: fuori dalla sessione Auth.js. Si autentica con il token di un
+  `MeetingIntegration` (creato dal CEO in `/verbali/collegamenti`, mostrato una volta, nel DB solo l'hash SHA-256).
+  Il token decide tenant, società e progetto predefinito; il modulo `VERBALI` deve essere attivo.
+  Stesso `id` esterno → nessun doppione. Progetto: quello del collegamento, poi il codice PO inviato, poi nessuno
+  (Claude lo propone task per task). Formato del corpo: `src/server/meetings/inbound.ts`.
+- Un'elaborazione «in corso» da più di 10 minuti è considerata interrotta e si può riprovare.
+
 ## Isolamento fra clienti
 
 `src/server/db/tenant.ts` è un'estensione Prisma che, per ogni modello in `TENANT_MODELS`:

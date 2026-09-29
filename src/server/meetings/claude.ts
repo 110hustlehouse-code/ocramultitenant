@@ -1,9 +1,9 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "@/env";
-import { buildPrompt, MINUTES_TOOL, normalizeOutput, SYSTEM_PROMPT, type Person, type ProjectRef } from "./extract";
+import { buildPrompt, MINUTES_SCHEMA, normalizeOutput, SYSTEM_PROMPT, type Person, type ProjectRef } from "./extract";
 
-/** Chiama Claude con uno strumento obbligatorio: la risposta è sempre JSON strutturato. */
+/** Chiama Claude con structured outputs: la risposta è sempre JSON conforme a MINUTES_SCHEMA. */
 export async function writeMinutes(input: {
   title: string;
   heldAt: Date;
@@ -19,11 +19,18 @@ export async function writeMinutes(input: {
     model: e.ANTHROPIC_MODEL,
     max_tokens: 8000,
     system: SYSTEM_PROMPT,
-    tools: [MINUTES_TOOL],
-    tool_choice: { type: "tool", name: MINUTES_TOOL.name },
+    output_config: { format: { type: "json_schema", schema: MINUTES_SCHEMA } },
     messages: [{ role: "user", content: buildPrompt(input) }],
   });
-  const call = res.content.find((b) => b.type === "tool_use");
-  if (!call || call.type !== "tool_use") throw new Error("L'AI non ha restituito il verbale. Riprova.");
-  return normalizeOutput(call.input, input);
+  if (res.stop_reason === "refusal") throw new Error("L'AI ha rifiutato di elaborare questa trascrizione.");
+  if (res.stop_reason === "max_tokens") throw new Error("Riunione troppo lunga per un solo verbale: la risposta è stata tagliata.");
+  const text = res.content.find((b) => b.type === "text");
+  if (!text || text.type !== "text") throw new Error("L'AI non ha restituito il verbale. Riprova.");
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text.text);
+  } catch {
+    throw new Error("L'AI ha restituito un verbale illeggibile. Riprova.");
+  }
+  return normalizeOutput(raw, input);
 }

@@ -28,38 +28,39 @@ export const proposalSchema = z.object({
 export type Proposal = z.infer<typeof proposalSchema>;
 export const proposalsSchema = z.array(proposalSchema);
 
-/** Schema dello strumento che Claude deve «chiamare»: garantisce una risposta strutturata. */
-export const MINUTES_TOOL = {
-  name: "registra_verbale",
-  description: "Registra il verbale della riunione e i task concreti emersi.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      minutes: {
-        type: "string",
-        description:
-          "Verbale in italiano, in markdown, con le sezioni: ## Partecipanti, ## Punti discussi, ## Decisioni, ## Prossimi passi. Sintetico e fedele: niente che non sia stato detto.",
-      },
-      tasks: {
-        type: "array",
-        description: "Solo azioni concrete assegnabili emerse dalla riunione. Nessun task inventato.",
-        items: {
-          type: "object",
-          properties: {
-            title: { type: "string", description: "Cosa va fatto, all'infinito, breve (es. «Inviare preventivo service luci»)." },
-            assigneeId: { type: ["string", "null"], description: "id della persona dall'elenco, se chiaramente indicata; altrimenti null." },
-            assigneeMention: { type: ["string", "null"], description: "Nome con cui la persona è stata chiamata nella riunione." },
-            projectId: { type: ["string", "null"], description: "id del progetto dall'elenco a cui si riferisce il task; null se non chiaro." },
-            dueDate: { type: ["string", "null"], description: "Scadenza AAAA-MM-GG se detta (anche relativa: «venerdì», «entro fine mese»); altrimenti null." },
-            priority: { type: "string", enum: ["NORMALE", "ALTA", "URGENTE"] },
-            evidence: { type: ["string", "null"], description: "Breve citazione della trascrizione da cui nasce il task." },
-          },
-          required: ["title", "assigneeId", "assigneeMention", "projectId", "dueDate", "priority", "evidence"],
+/**
+ * Schema della risposta (structured outputs): Claude risponde solo con JSON che lo rispetta.
+ * Niente strumento forzato: i modelli recenti non accettano più `tool_choice` di tipo «tool».
+ */
+export const MINUTES_SCHEMA = {
+  type: "object" as const,
+  additionalProperties: false,
+  properties: {
+    minutes: {
+      type: "string",
+      description:
+        "Verbale in italiano, in markdown, con le sezioni: ## Partecipanti, ## Punti discussi, ## Decisioni, ## Prossimi passi. Sintetico e fedele: niente che non sia stato detto.",
+    },
+    tasks: {
+      type: "array",
+      description: "Solo azioni concrete assegnabili emerse dalla riunione. Nessun task inventato.",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Cosa va fatto, all'infinito, breve (es. «Inviare preventivo service luci»)." },
+          assigneeId: { type: ["string", "null"], description: "id della persona dall'elenco, se chiaramente indicata; altrimenti null." },
+          assigneeMention: { type: ["string", "null"], description: "Nome con cui la persona è stata chiamata nella riunione." },
+          projectId: { type: ["string", "null"], description: "id del progetto dall'elenco a cui si riferisce il task; null se non chiaro." },
+          dueDate: { type: ["string", "null"], description: "Scadenza AAAA-MM-GG se detta (anche relativa: «venerdì», «entro fine mese»); altrimenti null." },
+          priority: { type: "string", enum: ["NORMALE", "ALTA", "URGENTE"] },
+          evidence: { type: ["string", "null"], description: "Breve citazione della trascrizione da cui nasce il task." },
         },
+        required: ["title", "assigneeId", "assigneeMention", "projectId", "dueDate", "priority", "evidence"],
+        additionalProperties: false,
       },
     },
-    required: ["minutes", "tasks"],
   },
+  required: ["minutes", "tasks"],
 };
 
 const rawOutputSchema = z.object({
@@ -121,7 +122,7 @@ export function buildPrompt(input: {
     `\nPersone del team (id: nome):\n${people}`,
     `\nProgetti aperti (id: nome):\n${projects}`,
     `\nTrascrizione:\n"""\n${transcript}\n"""`,
-    `\nChiama lo strumento registra_verbale.`,
+    `\nRispondi con il verbale e i task nel formato JSON richiesto.`,
   ]
     .filter(Boolean)
     .join("\n");
