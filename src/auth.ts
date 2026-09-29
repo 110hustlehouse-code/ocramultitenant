@@ -54,14 +54,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => ({
       return (await resolveLoginUser(user.email, await requestHost())) !== null;
     },
 
-    /** Al login salva nel token gli identificativi OCRA (non i permessi: quelli si rileggono dal DB). */
+    /** Al login salva nel token gli identificativi OCRA (i ruoli no: dipendono dalla società e si rileggono dal DB). */
     async jwt({ token, user, account }) {
       if (account && user?.email) {
         const dbUser = await resolveLoginUser(user.email, await requestHost());
         if (!dbUser) return null;
         token.uid = dbUser.id;
         token.tid = dbUser.tenantId;
-        token.role = dbUser.role;
         await prisma.user.update({ where: { id: dbUser.id }, data: { lastLoginAt: new Date() } });
       }
       return token;

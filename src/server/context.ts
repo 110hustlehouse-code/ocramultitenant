@@ -5,15 +5,22 @@ import { cache } from "react";
 import { auth } from "@/auth";
 import type { ModuleKey } from "@/generated/prisma/enums";
 import { getModule } from "@/lib/modules";
-import { can, hasValidAccess, type Permission } from "@/server/auth/permissions";
-import { COMPANY_COOKIE, resolveCompanyView } from "@/server/company/selection";
+import { hasValidAccess, type Permission } from "@/server/auth/permissions";
+import {
+  canInView,
+  COMPANY_COOKIE,
+  consolidatedCompanies,
+  resolveCompanyView,
+  type CompanyAccess,
+} from "@/server/company/selection";
 import { prisma } from "@/server/db/client";
 import { tenantExtension } from "@/server/db/tenant";
 
 /**
  * Il contesto di ogni richiesta autenticata. Punto d'ingresso UNICO per:
  *  • chi è l'utente (riletto dal DB a ogni richiesta: disattivazioni immediate)
- *  • quale tenant e quale società sta guardando
+ *  • quale tenant, a quali società ha accesso e con quale ruolo in ognuna
+ *  • quale società sta guardando (e quindi quale ruolo vale adesso)
  *  • `db`: client Prisma già filtrato sul tenant
  * `cache` lo calcola una volta sola per richiesta.
  */
@@ -25,33 +32,39 @@ export const getContext = cache(async () => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
-      tenant: {
-        include: { companies: { where: { active: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] } },
+      tenant: true,
+      memberships: {
+        where: { company: { active: true } },
+        include: { company: true },
+        orderBy: [{ company: { sortOrder: "asc" } }, { company: { name: "asc" } }],
       },
     },
   });
 
-  if (!user || !hasValidAccess(user)) redirect("/login?error=AccessDenied");
-
-  const { tenant } = user;
-  const { companies, ...tenantData } = tenant;
-  const permit = (permission: Permission) => can(user.role, permission);
+  if (!user) redirect("/login?error=AccessDenied");
+  const access: CompanyAccess[] = user.memberships.map((m) => ({ company: m.company, role: m.role }));
+  if (!hasValidAccess({ ...user, roles: access.map((a) => a.role) })) redirect("/login?error=AccessDenied");
 
   const requested = (await cookies()).get(COMPANY_COOKIE)?.value;
-  const view = resolveCompanyView(companies, requested, permit("company:consolidated"));
-  if (!view) throw new Error(`Il tenant "${tenant.slug}" non ha società attive.`);
+  const view = resolveCompanyView(access, requested);
+  if (!view) redirect("/login?error=AccessDenied");
 
   return {
     user: {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role,
     },
-    tenant: tenantData,
-    companies,
+    tenant: user.tenant,
+    /** Società accessibili all'utente, con il suo ruolo in ognuna. */
+    access,
+    companies: access.map((a) => a.company),
     view,
-    can: permit,
+    /** Ruolo nella società guardata; null nella vista consolidata. */
+    role: view.kind === "company" ? view.role : null,
+    /** L'utente può aprire la vista «Tutte» (a prescindere da cosa guarda ora)? */
+    canConsolidate: consolidatedCompanies(access).length > 0,
+    can: (permission: Permission) => canInView(view, access, permission),
     db: prisma.$extends(tenantExtension(user.tenantId)),
   };
 });

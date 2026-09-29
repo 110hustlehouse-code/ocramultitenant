@@ -15,7 +15,8 @@ datasource db {
   provider = "postgresql"
 }
 
-/// Cosa l'utente può fare. La società si sceglie in UI, non sta sull'utente.
+/// Cosa l'utente può fare IN UNA SOCIETÀ (vedi Membership).
+/// La stessa persona può essere PM di Fulcro e creativo in Duit.
 enum Role {
   CEO
   PROJECT_MANAGER
@@ -44,31 +45,41 @@ model Tenant {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  companies Company[]
-  users     User[]
+  companies   Company[]
+  users       User[]
+  memberships Membership[]
 }
 
 /// Società del tenant (Fulcro, Duit, St'Art). Porta il branding.
 model Company {
-  id         String   @id @default(cuid())
-  tenantId   String
-  slug       String
-  name       String
-  legalName  String?
-  vatNumber  String?
+  id                  String   @id @default(cuid())
+  tenantId            String
+  slug                String
+  name                String
+  legalName           String?
+  vatNumber           String?
   /// Colore brand per tema chiaro (hex)
-  colorLight String
+  colorLight          String
   /// Colore brand per tema scuro (hex)
-  colorDark  String
-  logoUrl    String?
+  colorDark           String
+  logoUrl             String?
   /// Sfondo della tessera logo (hex), per loghi pensati su fondo pieno
-  logoBg     String?
-  sortOrder  Int      @default(0)
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  logoBg              String?
+  /// Dati giuridici: servono per intestazioni, preventivi e PO
+  pec                 String?
+  sdiCode             String?
+  reaNumber           String?
+  legalAddress        String?
+  legalRepresentative String?
+  /// Acronimo usato nei codici PO (es. FL, DT)
+  poPrefix            String?
+  sortOrder           Int      @default(0)
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships Membership[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -81,7 +92,6 @@ model User {
   name            String
   /// Numero WhatsApp in formato E.164 — canale principale delle notifiche
   phone           String?
-  role            Role
   active          Boolean   @default(true)
   /// Solo per EXTERNAL: dopo questa data l'accesso è negato
   accessExpiresAt DateTime?
@@ -89,8 +99,30 @@ model User {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships Membership[]
 
   @@unique([tenantId, email])
   @@index([email])
+}
+
+/// Accesso di una persona a una società, con il ruolo che ha LÌ.
+/// Nessuna riga = la società non è visibile. Il team resta condiviso:
+/// un collaboratore ha una riga per ogni società in cui lavora.
+model Membership {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  companyId String
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+  @@index([tenantId])
+  @@index([companyId])
 }

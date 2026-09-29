@@ -9,7 +9,7 @@ Gestionale multi-tenant per agenzie che lavorano **a progetto**. Primo cliente: 
 1. **Il sistema estrae, non chiede.** Nessun campo obbligatorio a carico di un creativo.
    I task nascono dai verbali; un task si chiude allegando una prova.
 2. **Il margine si vede mentre il progetto è aperto.** Ore e costi contro preventivo, in continuo.
-3. **Il software insiste, le persone premono.** Il richiamo non blocca; il blocco duro lo attiva solo il CEO.
+3. **Il software insiste, le persone premono.** Il richiamo non blocca; il blocco lo decidono le persone (PM o CEO), mai l'automatismo.
 
 ## Regole tecniche non negoziabili
 - Dati di dominio SEMPRE tramite `ctx.db` (da `getContext()`), mai `prisma` diretto.
@@ -17,7 +17,8 @@ Gestionale multi-tenant per agenzie che lavorano **a progetto**. Primo cliente: 
 - Nuovo modello con `tenantId` → aggiungilo a `TENANT_MODELS` in `src/server/db/tenant.ts`
   (un test fallisce se lo dimentichi). Niente scritture annidate su modelli tenant.
 - Permessi: `ctx.can("permesso")`, mai `if (role === "CEO")`. Nuovi permessi in `permissions.ts`.
-- Ruolo ≠ società. La società è il selettore in UI (`ctx.view`), mai un campo sull'utente.
+- Il ruolo sta su `Membership` (utente × società), mai sull'utente. La società guardata è `ctx.view`;
+  il ruolo attivo è `ctx.role`. Controlli sempre con `ctx.can()`, che tiene conto della società.
 - Branding, listini, modelli di progetto, moduli attivi: nel DB, mai nel codice.
 - Colori dal DB solo tramite `safeHex()`. Colori di stato (ok/warn/danger) indipendenti dai brand.
 - Ogni modifica allo schema = migrazione (`npm run db:migrate -- --name <nome>`), committata.

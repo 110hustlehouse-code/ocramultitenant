@@ -6,13 +6,17 @@
 Tenant  (cliente OCRA, es. Gruppo Masini)
  ├─ modules[]         moduli attivi per questo cliente
  ├─ domain            es. ocra.fulcrolucem.it
- ├─ Company[]         società: Fulcro Lucem, Duit, St'Art (branding: colori chiaro/scuro, logo)
- └─ User[]            persone: role = CEO | PROJECT_MANAGER | CREATIVE | EXTERNAL
+ ├─ Company[]         società: branding (colori, logo) + dati giuridici (P.IVA, PEC, SDI, REA, legale rapp., prefisso PO)
+ ├─ User[]            persone (nessun ruolo qui)
+ └─ Membership[]      (utente, società) → role = CEO | PROJECT_MANAGER | CREATIVE | EXTERNAL
 ```
 
-**Ruolo e società sono separati.** Il ruolo sta sull'utente e dice cosa può fare.
-La società si sceglie dal selettore in UI (cookie `ocra_company`) e dice cosa sta guardando.
-Il team è condiviso fra le tre società, quindi un utente non è mai legato a una società.
+**Il ruolo vale in una società.** Decisione del 23 settembre: c'è un PM per società
+(Erika per Fulcro, Miele per St'Art, Giammarco per Duit) ed Erika è CEOO solo di Fulcro e St'Art.
+- Nessuna `Membership` per una società = quella società non compare nel selettore.
+- Il team resta condiviso: un collaboratore ha una riga per ogni società in cui lavora.
+- La società guardata si sceglie in UI (cookie `ocra_company`); il ruolo attivo è quello che l'utente ha lì.
+- Un trigger nel DB impedisce `Membership` fra utente e società di tenant diversi.
 
 ## Flusso di una richiesta
 
@@ -23,9 +27,11 @@ browser
       → getContext()        (src/server/context.ts, calcolato una volta per richiesta)
           • auth()           legge il JWT (id utente, tenant)
           • prisma.user…     rilegge l'utente dal DB: disattivato o scaduto → fuori subito
-          • cookie società   → ctx.view = { kind: "company", company } | { kind: "all" }
+          • ctx.access       società accessibili, con il ruolo in ognuna
+          • cookie società   → ctx.view = { kind: "company", company, role } | { kind: "all", companies }
+          • ctx.role         ruolo nella società guardata (null nel consolidato)
           • ctx.db           client Prisma filtrato sul tenant
-          • ctx.can(perm)    permessi del ruolo
+          • ctx.can(perm)    permessi nella vista corrente
       → requireModule(key)  404 se il modulo è spento per il cliente o manca il permesso
 ```
 
@@ -42,10 +48,10 @@ Limiti noti: le scritture annidate e le query `$queryRaw` non vengono filtrate.
 
 ## Accesso
 
-- Auth.js v5 con sessione JWT (7 giorni). Il token contiene solo `uid`, `tid` e `role`; i permessi veri si rileggono dal DB.
+- Auth.js v5 con sessione JWT (7 giorni). Il token contiene solo `uid` e `tid`; ruoli e permessi si rileggono dal DB a ogni richiesta.
 - Google OAuth: entra solo chi ha un'email verificata **e** presente in `User`.
 - La stessa email può comparire in più clienti (per esempio un freelance). In quel caso decide il dominio della richiesta (`Tenant.domain`).
-- Un utente esterno senza `accessExpiresAt` non entra mai.
+- Serve almeno una società accessibile. Chi è solo esterno (EXTERNAL ovunque) senza `accessExpiresAt` non entra mai.
 - Accesso di sviluppo (`dev-login`): attivo solo se `AUTH_DEV_LOGIN=true` **e** l'ambiente non è di produzione.
 
 ## Permessi
@@ -53,9 +59,12 @@ Limiti noti: le scritture annidate e le query `$queryRaw` non vengono filtrate.
 | Ruolo | Vede | Dati economici | Vista consolidata |
 |---|---|---|---|
 | CEO | Tutto | Sì | Sì |
-| Project manager | Progetti e task di tutte le società | No | No |
+| Project manager | Progetti e task della società (anche blocco account) | No | No |
 | Creativo | I propri task e i file dei progetti assegnati | No | No |
 | Esterno | Un solo progetto, con scadenza | No | No |
+
+La vista consolidata esiste se l'utente è CEO in almeno due società e include solo quelle
+(Erika: Fulcro + St'Art). Lì vale solo ciò che l'utente può fare in ogni società inclusa.
 
 La mappa sta in `src/server/auth/permissions.ts`. Il filtro «solo i propri task» e «un solo progetto» arriva con il modulo 2.
 

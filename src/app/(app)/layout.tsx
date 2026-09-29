@@ -30,7 +30,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <CompanySwitcher
       companies={companies}
       active={active}
-      allowConsolidated={ctx.can("company:consolidated")}
+      allowConsolidated={ctx.canConsolidate}
       action={selectCompany}
     />
   );
@@ -49,7 +49,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="mt-auto flex items-center gap-2 border-t border-border pt-4">
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold">{ctx.user.name}</p>
-            <p className="label truncate">{ROLE_LABELS[ctx.user.role]}</p>
+            <p className="label truncate">{ctx.role ? ROLE_LABELS[ctx.role] : "Vista consolidata"}</p>
           </div>
           <ThemeToggle />
           <form action={signOutAction}>

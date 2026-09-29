@@ -14,9 +14,12 @@ export async function resolveLoginUser(rawEmail: string, host: string | null) {
 
   const candidates = await prisma.user.findMany({
     where: { email },
-    include: { tenant: { select: { id: true, domain: true } } },
+    include: {
+      tenant: { select: { id: true, domain: true } },
+      memberships: { where: { company: { active: true } }, select: { role: true } },
+    },
   });
-  const allowed = candidates.filter((u) => hasValidAccess(u));
+  const allowed = candidates.filter((u) => hasValidAccess({ ...u, roles: u.memberships.map((m) => m.role) }));
   if (allowed.length === 0) return null;
   if (allowed.length === 1) return allowed[0];
 

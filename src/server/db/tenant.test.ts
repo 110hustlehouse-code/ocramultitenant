@@ -96,4 +96,24 @@ describe.skipIf(!url)("isolamento sul database", () => {
       }),
     ).rejects.toThrow(TenantScopeError);
   });
+
+  it("un accesso (Membership) non può collegare utente e società di tenant diversi", async () => {
+    const user = await prisma.user.create({ data: { tenantId: a, email: `u-${suffix}@test.local`, name: "U" } });
+    const foreign = await prisma.company.findFirstOrThrow({ where: { tenantId: b } });
+    // Anche aggirando l'estensione (client di base), il database rifiuta.
+    await expect(
+      prisma.membership.create({ data: { tenantId: a, userId: user.id, companyId: foreign.id, role: "CEO" } }),
+    ).rejects.toThrow(/tenant diversi/);
+    await expect(
+      prisma.membership.create({ data: { tenantId: b, userId: user.id, companyId: foreign.id, role: "CEO" } }),
+    ).rejects.toThrow(/tenant diversi/);
+  });
+
+  it("gli accessi di un altro tenant non sono visibili", async () => {
+    const dbA = prisma.$extends(tenantExtension(a));
+    const userB = await prisma.user.create({ data: { tenantId: b, email: `v-${suffix}@test.local`, name: "V" } });
+    const companyB = await prisma.company.findFirstOrThrow({ where: { tenantId: b } });
+    await prisma.membership.create({ data: { tenantId: b, userId: userB.id, companyId: companyB.id, role: "CEO" } });
+    expect(await dbA.membership.findMany()).toEqual([]);
+  });
 });
