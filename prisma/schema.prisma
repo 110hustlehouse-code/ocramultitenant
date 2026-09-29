@@ -46,17 +46,18 @@ model Tenant {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  companies      Company[]
-  users          User[]
-  memberships    Membership[]
-  parties        Party[]
-  partyCompanies PartyCompany[]
-  projects       Project[]
-  projectMembers ProjectMember[]
-  tasks          Task[]
-  meetings       Meeting[]
-  reminders      Reminder[]
-  accountBlocks  AccountBlock[]
+  companies           Company[]
+  users               User[]
+  memberships         Membership[]
+  parties             Party[]
+  partyCompanies      PartyCompany[]
+  projects            Project[]
+  projectMembers      ProjectMember[]
+  tasks               Task[]
+  meetings            Meeting[]
+  meetingIntegrations MeetingIntegration[]
+  reminders           Reminder[]
+  accountBlocks       AccountBlock[]
 }
 
 /// Società del tenant (Fulcro, Duit, St'Art). Porta il branding.
@@ -87,11 +88,12 @@ model Company {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  memberships Membership[]
-  parties     PartyCompany[]
-  projects    Project[]
-  meetings    Meeting[]
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships         Membership[]
+  parties             PartyCompany[]
+  projects            Project[]
+  meetings            Meeting[]
+  meetingIntegrations MeetingIntegration[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -111,16 +113,17 @@ model User {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  memberships     Membership[]
-  managedProjects Project[]       @relation("ProjectManager")
-  projectMembers  ProjectMember[]
-  assignedTasks   Task[]          @relation("TaskAssignee")
-  completedTasks  Task[]          @relation("TaskCompletedBy")
-  meetings        Meeting[]
-  reminders       Reminder[]      @relation("ReminderRecipient")
-  blocks          AccountBlock[]  @relation("BlockedUser")
-  blocksIssued    AccountBlock[]  @relation("BlockedBy")
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships         Membership[]
+  managedProjects     Project[]            @relation("ProjectManager")
+  projectMembers      ProjectMember[]
+  assignedTasks       Task[]               @relation("TaskAssignee")
+  completedTasks      Task[]               @relation("TaskCompletedBy")
+  meetings            Meeting[]
+  meetingIntegrations MeetingIntegration[]
+  reminders           Reminder[]           @relation("ReminderRecipient")
+  blocks              AccountBlock[]       @relation("BlockedUser")
+  blocksIssued        AccountBlock[]       @relation("BlockedBy")
 
   @@unique([tenantId, email])
   @@index([email])
@@ -246,13 +249,14 @@ model Project {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
-  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  company  Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  client   Party?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  manager  User?           @relation("ProjectManager", fields: [managerId], references: [id], onDelete: SetNull)
-  members  ProjectMember[]
-  tasks    Task[]
-  meetings Meeting[]
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  client              Party?               @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  manager             User?                @relation("ProjectManager", fields: [managerId], references: [id], onDelete: SetNull)
+  members             ProjectMember[]
+  tasks               Task[]
+  meetings            Meeting[]
+  meetingIntegrations MeetingIntegration[]
 
   @@unique([tenantId, code])
   @@index([tenantId, companyId, status])
@@ -326,38 +330,87 @@ enum MeetingStatus {
   ERRORE
 }
 
+/// Da dove arriva la riunione. Cambia solo l'ingresso: dopo, il flusso è uno solo.
+enum MeetingSource {
+  /// Registrata in app con il tasto «ascolto»
+  REGISTRAZIONE
+  /// File audio caricato (Meet, Zoom, telefono…)
+  AUDIO
+  /// Trascrizione già fatta altrove, incollata o caricata come testo
+  TESTO
+  /// Inviata da un servizio esterno (Fireflies, n8n…) tramite collegamento
+  WEBHOOK
+}
+
 /// Riunione: audio → trascrizione → verbale → task proposti → confermati dal PM.
 model Meeting {
-  id          String        @id @default(cuid())
-  tenantId    String
-  companyId   String
+  id            String         @id @default(cuid())
+  tenantId      String
+  companyId     String
   /// Riunione di un progetto (i task proposti vanno lì per default)
-  projectId   String?
-  title       String
-  heldAt      DateTime
+  projectId     String?
+  title         String
+  heldAt        DateTime
   /// Oggetto su R2 con l'audio originale
-  audioKey    String?
-  durationSec Int?
-  transcript  String?
+  audioKey      String?
+  durationSec   Int?
+  transcript    String?
   /// Verbale in markdown: partecipanti, punti, decisioni
-  minutes     String?
+  minutes       String?
   /// Task proposti dall'AI, da confermare (JSON validato con zod)
-  proposals   Json?
-  status      MeetingStatus @default(BOZZA)
-  error       String?
-  createdById String?
-  confirmedAt DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  proposals     Json?
+  status        MeetingStatus  @default(BOZZA)
+  /// Vuoto finché non arriva audio o testo
+  source        MeetingSource?
+  /// Collegamento che l'ha inviata (solo WEBHOOK)
+  integrationId String?
+  /// Id della riunione nel servizio esterno: lo stesso invio ripetuto non crea doppioni
+  externalId    String?
+  error         String?
+  createdById   String?
+  confirmedAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  createdBy User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  tasks     Task[]
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  project     Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy   User?               @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  integration MeetingIntegration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  tasks       Task[]
 
+  @@unique([integrationId, externalId])
   @@index([tenantId, companyId, heldAt])
   @@index([projectId])
+}
+
+/// Collegamento con un servizio di trascrizione esterno. Autentica con un token di servizio
+/// (non una sessione utente); nel DB c'è solo l'hash. Decide società e progetto predefinito.
+model MeetingIntegration {
+  id          String    @id @default(cuid())
+  tenantId    String
+  companyId   String
+  /// Nome per riconoscerlo, es. «Fireflies Erika»
+  name        String
+  /// Progetto in cui vanno le riunioni, se il collegamento è per un solo progetto
+  projectId   String?
+  /// SHA-256 del token (il token in chiaro si vede solo alla creazione)
+  tokenHash   String    @unique
+  /// Ultime 4 cifre, per riconoscerlo in elenco
+  tokenHint   String
+  active      Boolean   @default(true)
+  lastUsedAt  DateTime?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project   Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  meetings  Meeting[]
+
+  @@index([tenantId, companyId])
 }
 
 enum ReminderChannel {

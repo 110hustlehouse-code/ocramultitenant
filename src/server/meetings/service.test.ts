@@ -44,11 +44,13 @@ describe.skipIf(!url)("verbali sul database", () => {
     await prisma.$disconnect();
   });
 
-  const fakeDeps = (seen: { people?: string[] } = {}): ProcessingDeps => ({
+  const fakeDeps = (seen: { people?: string[]; verbalizer?: string; durationSec?: number | null } = {}): ProcessingDeps => ({
     signedUrl: async (k) => `https://r2.example/${k}`,
     transcribe: async (u) => ({ text: `[00:01] Voce 1: da ${u}. Marco, montaggio entro venerdì.`, durationSec: 1800 }),
     minutes: async (input) => {
       seen.people = input.people.map((p) => p.name).sort();
+      seen.verbalizer = input.verbalizer;
+      seen.durationSec = input.durationSec;
       return {
         minutes: "## Decisioni\n- Montaggio entro venerdì",
         proposals: [
@@ -67,16 +69,16 @@ describe.skipIf(!url)("verbali sul database", () => {
   it("audio → trascrizione → verbale → task proposti → conferma → task veri", async () => {
     const m = await createMeeting(asPm(), { title: "Produzione Nora", heldAt: "2026-09-29", companyId: duit.id, projectId });
     await expect(attachAudio(asPm(), m.id, `${tenantId}/meetings/altro/x.webm`)).rejects.toThrow(/non valido/);
-    await attachAudio(asPm(), m.id, `${tenantId}/meetings/${m.id}/1-registrazione.webm`);
+    await attachAudio(asPm(), m.id, `${tenantId}/meetings/${m.id}/1-registrazione.webm`, "REGISTRAZIONE");
 
     const job = await startProcessing(asPm(), m.id);
     await expect(startProcessing(asPm(), m.id)).rejects.toThrow(/già in corso/);
-    const seen: { people?: string[] } = {};
+    const seen: { people?: string[]; verbalizer?: string; durationSec?: number | null } = {};
     await runProcessing(job, fakeDeps(seen));
-    expect(seen.people).toEqual(["Erika", "Marco Villa"]);
+    expect(seen).toMatchObject({ people: ["Erika", "Marco Villa"], verbalizer: "OCRA, per Erika", durationSec: 1800 });
 
     const ready = await getMeeting(asPm(), m.id);
-    expect(ready).toMatchObject({ status: "DA_RIVEDERE", durationSec: 1800, canWrite: true });
+    expect(ready).toMatchObject({ status: "DA_RIVEDERE", durationSec: 1800, canWrite: true, source: "REGISTRAZIONE" });
     expect(ready?.transcript).toContain("r2.example");
     expect(ready?.proposals).toHaveLength(2);
 
@@ -101,7 +103,22 @@ describe.skipIf(!url)("verbali sul database", () => {
     await setTranscript(asPm(), m.id, "Erika: ".padEnd(80, "bla "));
     const job = await startProcessing(asPm(), m.id);
     await runProcessing(job, { ...fakeDeps(), minutes: async () => { throw new Error("AI non configurata"); } });
-    expect(await getMeeting(asPm(), m.id)).toMatchObject({ status: "ERRORE", error: "AI non configurata" });
+    expect(await getMeeting(asPm(), m.id)).toMatchObject({ status: "ERRORE", error: "AI non configurata", source: "TESTO" });
+  });
+
+  it("un'elaborazione interrotta non resta bloccata: dopo 10 minuti si può riprovare", async () => {
+    const m = await createMeeting(asPm(), { title: "Interrotta", heldAt: "2026-09-29", companyId: duit.id, projectId: null });
+    await setTranscript(asPm(), m.id, "Erika: ".padEnd(80, "bla "));
+    await startProcessing(asPm(), m.id); // la funzione muore qui, prima di runProcessing
+    expect(await getMeeting(asPm(), m.id)).toMatchObject({ status: "IN_ELABORAZIONE", stale: false });
+    await expect(startProcessing(asPm(), m.id)).rejects.toThrow(/già in corso/);
+
+    const old = new Date(Date.now() - 11 * 60 * 1000);
+    await prisma.$executeRaw`UPDATE "Meeting" SET "updatedAt" = ${old} WHERE id = ${m.id}`;
+    expect(await getMeeting(asPm(), m.id)).toMatchObject({ stale: true });
+    const job = await startProcessing(asPm(), m.id);
+    await runProcessing(job, fakeDeps());
+    expect(await getMeeting(asPm(), m.id)).toMatchObject({ status: "DA_RIVEDERE", stale: false });
   });
 
   it("il collaboratore non vede i verbali", async () => {

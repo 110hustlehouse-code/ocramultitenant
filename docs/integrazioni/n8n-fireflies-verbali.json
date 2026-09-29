@@ -1,0 +1,158 @@
+{
+  "name": "Fireflies → OCRA verbali",
+  "nodes": [
+    {
+      "id": "5a9ddf54-affe-4735-a58e-79219d2ed92a",
+      "name": "Fireflies: trascrizione pronta",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "32c07ae6-451c-4dc0-ab51-e8a982efae41",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "fireflies-ocra",
+        "responseMode": "onReceived",
+        "options": {
+          "rawBody": true
+        }
+      }
+    },
+    {
+      "id": "ab619c61-a271-45a6-8ab7-f70e613ecf08",
+      "name": "Verifica firma",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Firma di Fireflies (Webhooks V2): X-Hub-Signature = \"sha256=\" + HMAC-SHA256(corpo grezzo, segreto).\n// Serve NODE_FUNCTION_ALLOW_BUILTIN=crypto nell'istanza n8n.\nconst crypto = require('crypto');\nconst secret = $env.FIREFLIES_WEBHOOK_SECRET;\nif (!secret) throw new Error('Manca FIREFLIES_WEBHOOK_SECRET');\nconst item = $input.first();\nconst raw = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst expected = 'sha256=' + crypto.createHmac('sha256', secret).update(raw).digest('hex');\nconst given = String((item.json.headers || {})['x-hub-signature'] || '');\nconst ok = given.length === expected.length && crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected));\nif (!ok) throw new Error('Firma Fireflies non valida');\nconst body = JSON.parse(raw.toString('utf8'));\n// Solo le trascrizioni completate; gli altri eventi si ignorano.\nif (body.event !== 'meeting.transcribed' || !body.meeting_id) return [];\nreturn [{ json: { meetingId: body.meeting_id } }];\n"
+      }
+    },
+    {
+      "id": "f1fd49f6-f548-4350-9fae-47a05b0485c2",
+      "name": "Leggi da Fireflies",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.fireflies.ai/graphql",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ query: \"query Transcript($id: String!) { transcript(id: $id) { id title dateString duration meeting_attendees { displayName name email } sentences { speaker_name text start_time } } }\", variables: { id: $json.meetingId } }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Fireflies API (Authorization: Bearer …)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "id": "5bc09626-f123-43b8-89f5-e21a493652ef",
+      "name": "Traduci per OCRA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Dal formato Fireflies a quello del webhook OCRA (vedi docs/integrazioni/FIREFLIES.md).\n// Codice PO del progetto: tra parentesi quadre nel titolo dell'evento, es. «Produzione Nora [FL/COMUNIC/01-2026/NORA/E]».\nconst PO = /\\[([^\\]]{2,200})\\]/;\nreturn $input.all().map(({ json }) => {\n  const t = json.data && json.data.transcript;\n  if (!t) throw new Error('Fireflies: trascrizione non trovata ' + JSON.stringify(json.errors || ''));\n  const sentences = t.sentences || [];\n  const durationSec = typeof t.duration === 'number' ? Math.round(t.duration * 60) : null;\n  // start_time è in secondi; se sembra in millisecondi (molto oltre la durata) si converte.\n  const maxStart = Math.max(0, ...sentences.map((s) => Number(s.start_time) || 0));\n  const scale = durationSec && maxStart > durationSec * 2 ? 1000 : 1;\n  const attendees = (t.meeting_attendees || []).map((a) => a.displayName || a.name || a.email).filter(Boolean);\n  const speakers = [...new Set(sentences.map((s) => s.speaker_name).filter(Boolean))];\n  const title = t.title || '';\n  const code = title.match(PO);\n  return {\n    json: {\n      id: 'fireflies:' + t.id,\n      title: title.replace(PO, '').trim() || null,\n      date: t.dateString || null,\n      durationSec,\n      participants: attendees.length ? attendees : speakers,\n      project: code ? code[1].trim() : null,\n      sentences: sentences.map((s) => ({\n        speaker: s.speaker_name || null,\n        text: s.text || '',\n        start: s.start_time == null ? null : Number(s.start_time) / scale,\n      })),\n    },\n  };\n});\n"
+      }
+    },
+    {
+      "id": "ff9e446a-9f11-4955-9fc0-630378e80f05",
+      "name": "Invia a OCRA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://DOMINIO-OCRA/api/webhooks/verbali",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "OCRA collegamento (Authorization: Bearer ocra_mtg_…)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 10000
+    }
+  ],
+  "connections": {
+    "Fireflies: trascrizione pronta": {
+      "main": [
+        [
+          {
+            "node": "Verifica firma",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verifica firma": {
+      "main": [
+        [
+          {
+            "node": "Leggi da Fireflies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leggi da Fireflies": {
+      "main": [
+        [
+          {
+            "node": "Traduci per OCRA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Traduci per OCRA": {
+      "main": [
+        [
+          {
+            "node": "Invia a OCRA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

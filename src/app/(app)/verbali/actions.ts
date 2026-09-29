@@ -15,6 +15,7 @@ import {
   startProcessing,
   type Decision,
 } from "@/server/meetings/service";
+import { createIntegration, disableIntegration } from "@/server/meetings/integrations";
 
 async function ctxWithModule() {
   const ctx = await getContext();
@@ -67,10 +68,10 @@ async function process(id: string) {
   revalidatePath(`/verbali/${id}`);
 }
 
-export async function audioUploadedAction(id: string, key: string): Promise<Result> {
+export async function audioUploadedAction(id: string, key: string, recorded: boolean): Promise<Result> {
   const ctx = await ctxWithModule();
   try {
-    await attachAudio(ctx, id, key);
+    await attachAudio(ctx, id, key, recorded ? "REGISTRAZIONE" : "AUDIO");
     await process(id);
     return {};
   } catch (e) {
@@ -122,4 +123,32 @@ export async function confirmAction(_prev: Result | undefined, fd: FormData): Pr
   revalidatePath(`/verbali/${id}`);
   revalidatePath("/progetti", "layout");
   return {};
+}
+
+type TokenResult = Result & { token?: string; name?: string };
+
+/** Crea il collegamento: il token torna una volta sola, da copiare nel servizio esterno. */
+export async function createIntegrationAction(_prev: TokenResult | undefined, fd: FormData): Promise<TokenResult> {
+  const ctx = await ctxWithModule();
+  try {
+    const { integration, token } = await createIntegration(ctx, {
+      name: String(fd.get("name") ?? ""),
+      companyId: String(fd.get("companyId") ?? ""),
+      projectId: fd.get("projectId")?.toString() || null,
+    });
+    revalidatePath("/verbali/collegamenti");
+    return { token, name: integration.name };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function disableIntegrationAction(fd: FormData): Promise<void> {
+  const ctx = await ctxWithModule();
+  try {
+    await disableIntegration(ctx, String(fd.get("id")));
+  } catch (e) {
+    if (!(e instanceof MeetingError)) throw e;
+  }
+  revalidatePath("/verbali/collegamenti");
 }

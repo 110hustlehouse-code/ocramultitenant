@@ -48,17 +48,41 @@ export function MeetingInput({ meetingId, audioEnabled }: { meetingId: string; a
   );
 }
 
-/** Carica un Blob su R2 con URL firmato, mostrando l'avanzamento; poi avvia l'elaborazione. */
-function useUploader(meetingId: string) {
+/**
+ * Carica un Blob su R2 con URL firmato, mostrando l'avanzamento; poi avvia l'elaborazione.
+ * Se qualcosa va storto il file resta in memoria e si può riprovare: una riunione registrata
+ * non si deve perdere per un caricamento fallito.
+ */
+function useUploader(meetingId: string, recorded: boolean) {
   const router = useRouter();
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState<{ blob: Blob; name: string } | null>(null);
+
+  // Chiudere la pagina durante il caricamento perderebbe la registrazione.
+  useEffect(() => {
+    if (progress === null) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [progress]);
 
   async function upload(blob: Blob, name: string) {
     setError(null);
+    setFailed(null);
+    const fail = (message: string) => {
+      setProgress(null);
+      setFailed({ blob, name });
+      setError(message);
+    };
     const type = blob.type || "audio/webm";
-    const res = await requestUploadAction(meetingId, { name, type, size: blob.size });
-    if (!res.url || !res.key) return setError(res.error ?? "Caricamento non disponibile.");
+    let res: Awaited<ReturnType<typeof requestUploadAction>>;
+    try {
+      res = await requestUploadAction(meetingId, { name, type, size: blob.size });
+    } catch {
+      return fail("Connessione assente. Riprova il caricamento.");
+    }
+    if (!res.url || !res.key) return fail(res.error ?? "Caricamento non disponibile.");
     setProgress(0);
     const ok = await new Promise<boolean>((resolve) => {
       const xhr = new XMLHttpRequest();
@@ -69,22 +93,22 @@ function useUploader(meetingId: string) {
       xhr.onerror = () => resolve(false);
       xhr.send(blob);
     });
-    if (!ok) {
-      setProgress(null);
-      return setError("Caricamento non riuscito. Controlla la connessione e riprova.");
+    if (!ok) return fail("Caricamento non riuscito. Controlla la connessione e riprova.");
+    let done: Awaited<ReturnType<typeof audioUploadedAction>>;
+    try {
+      done = await audioUploadedAction(meetingId, res.key, recorded);
+    } catch {
+      return fail("Connessione assente. Riprova il caricamento.");
     }
-    const done = await audioUploadedAction(meetingId, res.key);
-    if (done.error) {
-      setProgress(null);
-      return setError(done.error);
-    }
+    if (done.error) return fail(done.error);
     router.refresh();
   }
 
-  return { upload, progress, error };
+  const retry = failed ? () => void upload(failed.blob, failed.name) : null;
+  return { upload, retry, progress, error };
 }
 
-function UploadStatus({ progress, error }: { progress: number | null; error: string | null }) {
+function UploadStatus({ progress, error, retry }: { progress: number | null; error: string | null; retry: (() => void) | null }) {
   return (
     <>
       {progress !== null && (
@@ -96,12 +120,17 @@ function UploadStatus({ progress, error }: { progress: number | null; error: str
         </div>
       )}
       {error && <p className="text-sm text-danger">{error}</p>}
+      {retry && (
+        <button type="button" onClick={retry} className={buttonClass.secondary}>
+          Riprova il caricamento
+        </button>
+      )}
     </>
   );
 }
 
 function Recorder({ meetingId }: { meetingId: string }) {
-  const { upload, progress, error } = useUploader(meetingId);
+  const { upload, retry, progress, error } = useUploader(meetingId, true);
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
@@ -134,6 +163,13 @@ function Recorder({ meetingId }: { meetingId: string }) {
         const blob = new Blob(chunks.current, { type: rec.mimeType || "audio/webm" });
         void upload(blob, rec.mimeType.includes("mp4") ? "registrazione.m4a" : "registrazione.webm");
       };
+      // Microfono staccato o permesso revocato: si chiude e si carica quello che c'è.
+      stream.getAudioTracks()[0]?.addEventListener("ended", () => {
+        if (rec.state === "recording") {
+          rec.stop();
+          setRecording(false);
+        }
+      });
       rec.start(10_000); // un pezzo ogni 10 s: se la pagina si chiude male, si perde poco
       recorder.current = rec;
       setSeconds(0);
@@ -161,7 +197,7 @@ function Recorder({ meetingId }: { meetingId: string }) {
       </p>
       <div className="flex items-center gap-4">
         {!recording ? (
-          <button type="button" onClick={start} disabled={progress !== null} className={buttonClass.primary}>
+          <button type="button" onClick={start} disabled={progress !== null || retry !== null} className={buttonClass.primary}>
             <Mic className="size-4" aria-hidden /> Inizia a registrare
           </button>
         ) : (
@@ -179,13 +215,13 @@ function Recorder({ meetingId }: { meetingId: string }) {
         )}
       </div>
       {micError && <p className="text-sm text-danger">{micError}</p>}
-      <UploadStatus progress={progress} error={error} />
+      <UploadStatus progress={progress} error={error} retry={retry} />
     </div>
   );
 }
 
 function AudioUpload({ meetingId }: { meetingId: string }) {
-  const { upload, progress, error } = useUploader(meetingId);
+  const { upload, retry, progress, error } = useUploader(meetingId, false);
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted">Registrazione di Meet, Zoom, Teams o del telefono: mp3, m4a, wav, webm, mp4 (fino a 500 MB).</p>
@@ -200,7 +236,7 @@ function AudioUpload({ meetingId }: { meetingId: string }) {
           if (f) void upload(f, f.name);
         }}
       />
-      <UploadStatus progress={progress} error={error} />
+      <UploadStatus progress={progress} error={error} retry={retry} />
     </div>
   );
 }

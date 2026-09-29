@@ -9,7 +9,7 @@ import { ProposalsForm } from "@/components/meetings/ProposalsForm";
 import { buttonClass, CompanyTag } from "@/components/registry/ui";
 import { integrations } from "@/env";
 import { formatDay } from "@/lib/dates";
-import { MEETING_STATUS } from "@/lib/meetings";
+import { MEETING_SOURCE, MEETING_STATUS } from "@/lib/meetings";
 import { cn } from "@/lib/cn";
 import { requireModule } from "@/server/context";
 import { getMeeting } from "@/server/meetings/service";
@@ -62,6 +62,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
             </>
           )}
           {meeting.durationSec && <> · {Math.round(meeting.durationSec / 60)} min</>}
+          {meeting.source && <> · {MEETING_SOURCE[meeting.source]}</>}
         </p>
       </header>
 
@@ -69,7 +70,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         <MeetingInput meetingId={meeting.id} audioEnabled={i.storage && i.transcription} />
       )}
 
-      {meeting.status === "IN_ELABORAZIONE" && (
+      {meeting.status === "IN_ELABORAZIONE" && !meeting.stale && (
         <div role="status" className="flex items-center gap-3 rounded-xl border border-border bg-surface p-5">
           <LoaderCircle className="size-5 animate-spin text-muted" aria-hidden />
           <div>
@@ -82,12 +83,14 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         </div>
       )}
 
-      {meeting.status === "ERRORE" && (
+      {(meeting.status === "ERRORE" || meeting.stale) && (
         <div role="alert" className="space-y-3 rounded-xl border border-danger/40 bg-danger/10 p-5">
           <p className="flex items-center gap-2 font-semibold">
             <AlertTriangle className="size-4 text-danger" aria-hidden /> Elaborazione non riuscita
           </p>
-          <p className="text-sm">{meeting.error}</p>
+          <p className="text-sm">
+            {meeting.stale ? "L'elaborazione si è interrotta prima di finire. Audio e testo sono salvati: puoi riprovare." : meeting.error}
+          </p>
           {meeting.canWrite && (
             <form action={retryAction}>
               <input type="hidden" name="id" value={meeting.id} />

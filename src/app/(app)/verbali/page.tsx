@@ -1,10 +1,10 @@
-import { Plus } from "lucide-react";
+import { Plug, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ButtonLink, CompanyTag } from "@/components/registry/ui";
 import { cn } from "@/lib/cn";
 import { formatDay } from "@/lib/dates";
-import { MEETING_STATUS } from "@/lib/meetings";
+import { MEETING_SOURCE, MEETING_STATUS } from "@/lib/meetings";
 import { requireModule } from "@/server/context";
 import { listMeetings } from "@/server/meetings/service";
 import { canIn } from "@/server/projects/service";
@@ -17,6 +17,7 @@ export default async function Page() {
   const ctx = await requireModule("VERBALI");
   const meetings = await listMeetings(ctx);
   const canCreate = viewCompanies(ctx).some((c) => canIn(ctx, c.id, "meetings:write"));
+  const canConnect = ctx.access.some((a) => canIn(ctx, a.company.id, "settings:manage"));
   const companies = new Map(ctx.companies.map((c) => [c.id, c]));
 
   return (
@@ -29,11 +30,18 @@ export default async function Page() {
             Registri la riunione, OCRA scrive il verbale e propone i task con responsabile e scadenza. Tu confermi.
           </p>
         </div>
-        {canCreate && (
-          <ButtonLink href="/verbali/nuovo" variant="primary">
-            <Plus className="size-4" aria-hidden /> Nuova riunione
-          </ButtonLink>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {canConnect && (
+            <ButtonLink href="/verbali/collegamenti" variant="secondary">
+              <Plug className="size-4" aria-hidden /> Collegamenti
+            </ButtonLink>
+          )}
+          {canCreate && (
+            <ButtonLink href="/verbali/nuovo" variant="primary">
+              <Plus className="size-4" aria-hidden /> Nuova riunione
+            </ButtonLink>
+          )}
+        </div>
       </header>
 
       {meetings.length === 0 ? (
@@ -54,7 +62,10 @@ export default async function Page() {
                 >
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{m.title}</p>
-                    <p className="truncate text-xs text-muted">{m.project?.name ?? "Riunione interna"}</p>
+                    <p className="truncate text-xs text-muted">
+                      {m.project?.name ?? "Riunione interna"}
+                      {m.source && <> · {MEETING_SOURCE[m.source]}</>}
+                    </p>
                   </div>
                   <div>{c && <CompanyTag name={c.name} short={c.poPrefix ?? c.name} color={c.colorLight} />}</div>
                   <p className="num text-sm text-muted">{formatDay(m.heldAt)}</p>
