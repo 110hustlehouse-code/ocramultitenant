@@ -1,13 +1,19 @@
 import type { NextConfig } from "next";
 
-// In Codespaces l'app è servita da <nome>-<porta>.<dominio di inoltro> (es. app.github.dev o
-// preview.app.github.dev): senza questi permessi Server Actions (login incluso) e HMR vengono rifiutati.
-// «**» copre qualsiasi profondità di sottodominio; «*» ne copre uno solo e non basta.
-const forwarding = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
+// In Codespaces l'app è servita da <nome>-3000.app.github.dev:
+// senza questi permessi le Server Actions e l'HMR vengono rifiutati.
+// Calcoliamo l'host esatto (invece di affidarci al wildcard *.app.github.dev,
+// che in alcune versioni di Next.js non fa match correttamente).
+const codespaceName = process.env.CODESPACE_NAME;
+const forwardingDomain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
+
 const codespaceOrigins =
-  process.env.CODESPACES === "true"
-    ? ["**.app.github.dev", ...(forwarding ? [`**.${forwarding}`] : [])]
+  process.env.CODESPACES === "true" && codespaceName && forwardingDomain
+    ? [`${codespaceName}-3000.${forwardingDomain}`, "*.app.github.dev"]
     : [];
+
+console.log("DEBUG codespaceOrigins:", codespaceOrigins);
+console.log("DEBUG env:", { CODESPACES: process.env.CODESPACES, codespaceName, forwardingDomain });
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: codespaceOrigins,

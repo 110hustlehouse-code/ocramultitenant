@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isDevLoginEnabled, isGoogleEnabled } from "@/env";
-import { signInDev, signInWithGoogle, signOutAction } from "@/server/auth/actions";
+import { signInWithGoogle } from "@/server/auth/actions";
 
 export const metadata: Metadata = { title: "Accedi" };
 
@@ -43,7 +43,7 @@ export default async function LoginPage({ searchParams }: Props) {
           <div role="alert" className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm">
             {message}
             {session && (
-              <form action={signOutAction} className="mt-2">
+              <form action="/api/dev-logout" method="POST" className="mt-2">
                 <button type="submit" className="underline">
                   Esci e cambia account
                 </button>
@@ -73,7 +73,11 @@ export default async function LoginPage({ searchParams }: Props) {
           )}
 
           {dev && (
-            <form action={signInDev} className="space-y-3 border-t border-dashed border-border pt-4 first:border-0 first:pt-0">
+            <form
+              action="/api/dev-login"
+              method="POST"
+              className="space-y-3 border-t border-dashed border-border pt-4 first:border-0 first:pt-0"
+            >
               <p className="label">Accesso sviluppo · non attivo in produzione</p>
               <input type="hidden" name="callbackUrl" value={target} />
               <label className="block text-sm">
