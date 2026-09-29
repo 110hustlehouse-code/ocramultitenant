@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 import { formatDay } from "@/lib/dates";
 import { requireModule } from "@/server/context";
 import { isOverdue, STATUS_LABELS } from "@/server/projects/input";
+import { activeFollowUpsFor, canStartFollowUp } from "@/server/followups/service";
 import { canIn, listProjects, myOpenTasks } from "@/server/projects/service";
 import { viewCompanies } from "@/server/registry/service";
 
@@ -18,6 +19,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
   const [projects, mine] = await Promise.all([listProjects(ctx, stato), myOpenTasks(ctx)]);
   const companies = new Map(ctx.companies.map((c) => [c.id, c]));
   const canCreate = viewCompanies(ctx).some((c) => canIn(ctx, c.id, "projects:write"));
+  const followUps = await activeFollowUpsFor(ctx, mine.map((t) => t.id));
 
   return (
     <div className="space-y-8">
@@ -58,6 +60,18 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
                   context: `${companies.get(t.project.companyId)?.poPrefix ?? ""} · ${t.project.name}`,
                   contextHref: `/progetti/${t.project.id}`,
                   blockerNote: t.blockerNote,
+                  followUp: followUps.get(t.id) ?? null,
+                  followUpStart:
+                    t.project.client && canStartFollowUp(ctx, t, t.project.companyId, true)
+                      ? {
+                          clientName: t.project.client.name,
+                          contactName: t.project.client.contactName,
+                          contactEmail: t.project.client.email,
+                          projectName: t.project.name,
+                          companyName: t.project.company.name,
+                          senderName: ctx.user.name,
+                        }
+                      : null,
                 }}
               />
             ))}

@@ -2,8 +2,17 @@ import "server-only";
 import nodemailer, { type Transporter } from "nodemailer";
 import { env } from "@/env";
 
-export type Email = { to: string; subject: string; text: string; html: string; replyTo?: string };
-export type SendResult = { delivered: boolean; error?: string };
+export type Email = {
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+  replyTo?: string;
+  /** Risposta in un thread esistente (Message-ID del messaggio precedente) */
+  inReplyTo?: string;
+  references?: string[];
+};
+export type SendResult = { delivered: boolean; error?: string; messageId?: string };
 export type EmailSender = (email: Email) => Promise<SendResult>;
 
 let transport: Transporter | undefined;
@@ -25,8 +34,8 @@ export const sendEmail: EmailSender = async (email) => {
     auth: { user: e.SMTP_USER, pass: e.SMTP_PASS },
   });
   try {
-    await transport.sendMail({ from: e.SMTP_FROM ?? e.SMTP_USER, ...email });
-    return { delivered: true };
+    const info = await transport.sendMail({ from: e.SMTP_FROM ?? e.SMTP_USER, ...email });
+    return { delivered: true, messageId: info.messageId };
   } catch (err) {
     return { delivered: false, error: err instanceof Error ? err.message.slice(0, 300) : "Invio non riuscito" };
   }

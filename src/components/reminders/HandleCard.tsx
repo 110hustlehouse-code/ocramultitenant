@@ -93,9 +93,9 @@ export function HandleCard({
       <div className="grid gap-3 lg:grid-cols-2">
         <form action={nudgeForm} className="flex gap-2">
           <input type="hidden" name="taskId" value={task.id} />
-          <input name="message" placeholder="Messaggio (facoltativo)" aria-label="Messaggio di sollecito" className={inputClass} />
+          <input name="message" placeholder="Messaggio (facoltativo)" aria-label="Messaggio al collaboratore" className={inputClass} />
           <button type="submit" disabled={nudging || !task.assigneeId} className={buttonClass.secondary}>
-            Sollecita
+            Richiama
           </button>
         </form>
         <form action={moveForm} className="flex gap-2">

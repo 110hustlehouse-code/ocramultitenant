@@ -3,6 +3,7 @@
 import { Check, Link2, RotateCcw, Trash2 } from "lucide-react";
 import { useActionState, useState } from "react";
 import { buttonClass, inputClass } from "@/components/registry/ui";
+import { FollowUpControl, type FollowUpActive, type FollowUpStart } from "@/components/followups/FollowUpControl";
 import { BlockerButton } from "@/components/reminders/BlockerButton";
 import { cn } from "@/lib/cn";
 import {
@@ -31,6 +32,10 @@ export type TaskRowData = {
   blockerNote?: string | null;
   /** Livello di richiamo (3 = al PM, 4 = al CEO) */
   escalation?: number;
+  /** Sollecito al cliente in corso */
+  followUp?: FollowUpActive | null;
+  /** Dati per avviare un sollecito (null = non può, o progetto senza cliente) */
+  followUpStart?: FollowUpStart | null;
 };
 
 const isUrl = (s: string) => /^https?:\/\//i.test(s);
@@ -93,9 +98,10 @@ export function TaskRow({
               {task.escalation === 4 ? "Passato al CEO" : task.blockerNote ? `Non può: «${task.blockerNote}»` : "Da gestire: già due promemoria"}
             </p>
           )}
-          {!done && own && !canManage && (
-            <div className="mt-1">
-              <BlockerButton taskId={task.id} note={task.blockerNote ?? null} />
+          {!done && (task.followUp || task.followUpStart || (own && !canManage)) && (
+            <div className="mt-1 flex flex-wrap items-start gap-x-4 gap-y-1">
+              {own && !canManage && !task.followUp && <BlockerButton taskId={task.id} note={task.blockerNote ?? null} />}
+              <FollowUpControl taskId={task.id} active={task.followUp ?? null} start={task.followUpStart ?? null} />
             </div>
           )}
           {done && task.proof && (

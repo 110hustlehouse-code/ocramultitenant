@@ -14,7 +14,7 @@ const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url 
 
 const DAY = 24 * 60 * 60 * 1000;
 
-const MODULES: ModuleKey[] = ["ANAGRAFICHE", "PROGETTI", "VERBALI", "RICHIAMO", "DOCUMENTI", "MARGINE", "PREVENTIVI"];
+const MODULES: ModuleKey[] = ["ANAGRAFICHE", "PROGETTI", "VERBALI", "RICHIAMO", "SOLLECITI", "DOCUMENTI", "MARGINE", "PREVENTIVI"];
 
 async function main() {
   const tenant = await prisma.tenant.upsert({

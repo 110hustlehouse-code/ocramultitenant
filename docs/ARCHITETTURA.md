@@ -68,6 +68,22 @@ servizio esterno (webhook) ─────────────────�
   durata stimata, sintesi per punto, decisioni prese (solo quelle formali), azioni assegnate (= i task proposti),
   prossimo appuntamento. Il verbalizzatore lo scrive il sistema: «OCRA, per <chi l'ha avviato>» o il collegamento.
 
+## Richiami e Solleciti: due cose diverse
+
+| | Richiami (`src/server/reminders`) | Solleciti (`src/server/followups`) |
+|---|---|---|
+| Verso | persone interne | il referente del cliente (`Party`) |
+| Parte | da solo, alla scadenza del task | da una persona (assegnatario o PM) con «In attesa del cliente» |
+| Poi | 2 promemoria → PM → CEO (manuale), blocco account deciso da PM/CEO | promemoria ogni 3 giorni lavorativi (max 2, stesso thread), poi avviso al PM; nessun blocco |
+| Registro | `Reminder` (eventi per livello) | `ClientFollowUp` (stato e durata) + `ClientMessage` (testo esatto inviato) |
+
+Mentre un sollecito è attivo il motore dei richiami salta il task. Chiudere il task chiude il sollecito.
+Entrambi girano nell'endpoint orario `/api/cron/richiami`; i solleciti scrivono solo nei giorni lavorativi
+dalle 9 alle 18 di Roma (`src/lib/workdays.ts`, festività nazionali comprese). I testi per il cliente
+(`src/lib/followups.ts`) sono in prima persona e firmati da chi ha avviato, senza riferimenti a OCRA;
+le risposte vanno a quella persona (`Reply-To`). I giorni fermi per il cliente per progetto
+(`followUpsBoard`) sono il dato che userà il Margine.
+
 ## Isolamento fra clienti
 
 `src/server/db/tenant.ts` è un'estensione Prisma che, per ogni modello in `TENANT_MODELS`:

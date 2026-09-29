@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "Richiami" };
 const KIND = {
   AUTOMATICO: "Promemoria automatico",
   AL_PM: "Passato al PM",
-  SOLLECITO: "Sollecito",
+  SOLLECITO: "Richiamo del PM",
   AL_CEO: "Passato al CEO",
   NON_POSSO: "«Non posso»",
 } as const;

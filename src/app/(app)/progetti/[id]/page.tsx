@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 import { formatDay } from "@/lib/dates";
 import { requireModule } from "@/server/context";
 import { isOverdue, STATUS_LABELS } from "@/server/projects/input";
+import { activeFollowUpsFor, canStartFollowUp } from "@/server/followups/service";
 import { assignableUsers, getProject } from "@/server/projects/service";
 import { setProjectStatusAction } from "../actions";
 
@@ -22,6 +23,19 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const done = project.tasks.filter((t) => t.status === "FATTO");
   const overdue = open.filter((t) => isOverdue(t)).length;
   const c = project.company;
+  const followUps = await activeFollowUpsFor(ctx, open.map((t) => t.id));
+  const client = project.client;
+  const followUpStart = (t: (typeof project.tasks)[number]) =>
+    client && canStartFollowUp(ctx, t, project.companyId, true)
+      ? {
+          clientName: client.name,
+          contactName: client.contactName,
+          contactEmail: client.email,
+          projectName: project.name,
+          companyName: c.name,
+          senderName: ctx.user.name,
+        }
+      : null;
 
   const facts: Array<[string, string | null]> = [
     ["Cliente", project.client?.name ?? "Interno"],
@@ -51,6 +65,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         completedByName: t.completedBy?.name ?? null,
         blockerNote: t.blockerNote,
         escalation: t.escalation,
+        followUp: followUps.get(t.id) ?? null,
+        followUpStart: t.status === "DA_FARE" ? followUpStart(t) : null,
       }}
     />
   );

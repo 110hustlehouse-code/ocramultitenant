@@ -52,6 +52,15 @@ export const MODULES: readonly ModuleDefinition[] = [
     ready: true,
   },
   {
+    key: "SOLLECITI",
+    label: "Solleciti",
+    href: "/solleciti",
+    permission: "followups:manage",
+    summary: "Task fermi in attesa di un cliente: il messaggio al cliente, i promemoria dopo giorni di silenzio, i giorni persi.",
+    step: 5,
+    ready: true,
+  },
+  {
     key: "DOCUMENTI",
     label: "Documenti",
     href: "/documenti",

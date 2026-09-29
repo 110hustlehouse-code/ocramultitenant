@@ -67,7 +67,7 @@ export async function getProject(ctx: AppContext, id: string) {
     where: { AND: [{ id }, projectScope(ctx, ctx.companies)] },
     include: {
       company: true,
-      client: { select: { id: true, name: true } },
+      client: { select: { id: true, name: true, email: true, contactName: true } },
       manager: { select: { id: true, name: true } },
       members: { include: { user: { select: { id: true, name: true } } } },
     },
@@ -256,8 +256,13 @@ export async function completeTask(ctx: AppContext, taskId: string, rawProof: st
     where: { id: taskId },
     data: { status: "FATTO", proof: proof.data, completedAt: new Date(), completedById: ctx.user.id },
   });
-  // Consegnato: l'eventuale blocco dell'account su questo task si chiude da solo.
+  // Consegnato: l'eventuale blocco dell'account su questo task si chiude da solo,
+  // e se si aspettava il cliente l'attesa è finita.
   await ctx.db.accountBlock.updateMany({ where: { taskId, releasedAt: null }, data: { releasedAt: new Date() } });
+  await ctx.db.clientFollowUp.updateMany({
+    where: { taskId, status: "ATTIVO" },
+    data: { status: "RISOLTO", resolvedAt: new Date(), resolvedById: ctx.user.id, resolutionNote: "Task chiuso", nextReminderAt: null },
+  });
 }
 
 export async function reopenTask(ctx: AppContext, taskId: string) {
@@ -276,7 +281,17 @@ export async function myOpenTasks(ctx: AppContext) {
       status: "DA_FARE",
       project: { companyId: { in: ctx.companies.map((c) => c.id) }, status: { in: OPEN } },
     },
-    include: { project: { select: { id: true, name: true, companyId: true } } },
+    include: {
+      project: {
+        select: {
+          id: true,
+          name: true,
+          companyId: true,
+          company: { select: { name: true } },
+          client: { select: { name: true, email: true, contactName: true } },
+        },
+      },
+    },
     orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { priority: "desc" }],
     take: 200,
   });

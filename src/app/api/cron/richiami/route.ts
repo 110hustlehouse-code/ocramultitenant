@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { env } from "@/env";
+import { runClientFollowUps } from "@/server/followups/service";
 import { runReminders } from "@/server/reminders/engine";
 
 export const dynamic = "force-dynamic";
@@ -17,9 +18,11 @@ function authorized(request: Request): boolean {
 /**
  * Chiamato ogni ora da un pianificatore (Vercel Cron, n8n o GitHub Actions) con
  * `Authorization: Bearer <CRON_SECRET>`. Il motore decide da solo cosa inviare in base all'ora di Roma.
+ * Stessa chiamata per i promemoria dei solleciti ai clienti (solo in orario d'ufficio).
  */
 export async function GET(request: Request) {
   if (!authorized(request)) return new Response("Non autorizzato", { status: 401 });
-  const summary = await runReminders();
-  return Response.json(summary);
+  const reminders = await runReminders();
+  const followUps = await runClientFollowUps();
+  return Response.json({ ...reminders, followUps });
 }
