@@ -15,6 +15,7 @@ Ogni modulo alimenta quello dopo. Non si salta un passo.
 | 6 | Documenti | | File di progetto e prove |
 | 7 | Margine in tempo reale e consolidato | ⏳ prossimo (priorità 2 di Daniele) | Il modulo che vale di più in vendita. Solo per il CEO |
 | 8 | Preventivi e creazione automatica del progetto | | Preventivo accettato → progetto, cartella Drive, board (n8n) |
+| 8b | (pagina «Impostazioni società») | | Oggi condizioni, IBAN/piè di pagina, validità preventivo, numerazione e accento PDF (`pdfAccent`) si toccano solo da seed/DB. Serve una pagina CEO per modificarli senza uscire dall'app |
 
 ## Priorità dette da Daniele (23 set) — Fase 1
 1. **Verbali**: registrazione in sede (tasto «ascolto») e da Meet/Teams/Zoom → trascrizione → task assegnati

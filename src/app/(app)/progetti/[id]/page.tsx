@@ -8,7 +8,9 @@ import { cn } from "@/lib/cn";
 import { formatDay } from "@/lib/dates";
 import { requireModule } from "@/server/context";
 import { isOverdue, STATUS_LABELS } from "@/server/projects/input";
+import { formatEuro } from "@/lib/quotes";
 import { activeFollowUpsFor, canStartFollowUp } from "@/server/followups/service";
+import { projectBudget } from "@/server/quotes/service";
 import { assignableUsers, getProject } from "@/server/projects/service";
 import { setProjectStatusAction } from "../actions";
 
@@ -23,7 +25,10 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const done = project.tasks.filter((t) => t.status === "FATTO");
   const overdue = open.filter((t) => isOverdue(t)).length;
   const c = project.company;
-  const followUps = await activeFollowUpsFor(ctx, open.map((t) => t.id));
+  const [followUps, budget] = await Promise.all([
+    activeFollowUpsFor(ctx, open.map((t) => t.id)),
+    projectBudget(ctx, project.id, project.companyId),
+  ]);
   const client = project.client;
   const followUpStart = (t: (typeof project.tasks)[number]) =>
     client && canStartFollowUp(ctx, t, project.companyId, true)
@@ -118,6 +123,54 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           </div>
         ))}
       </dl>
+
+      {budget && budget.lines.length > 0 && (
+        <section aria-labelledby="budget-title" className="space-y-3">
+          <h2 id="budget-title" className="flex flex-wrap items-center gap-3 font-[family-name:var(--font-display)] text-lg font-semibold">
+            Budget
+            {budget.quote && (
+              <a href={`/preventivi/${budget.quote.id}`} className="text-sm font-normal text-muted underline">
+                dal preventivo n. {budget.quote.number}
+              </a>
+            )}
+            {budget.quote && !budget.quote.contractSignedAt && <span className="label text-warn">contratto da firmare</span>}
+            {budget.quote && !budget.quote.depositReceivedAt && <span className="label text-warn">acconto da ricevere</span>}
+          </h2>
+          <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-left">
+                  <th className="label px-4 py-2 font-normal">Voce</th>
+                  <th className="label px-4 py-2 text-right font-normal">Ricavo previsto</th>
+                  <th className="label px-4 py-2 text-right font-normal">Costo previsto</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {budget.lines.map((l) => (
+                  <tr key={l.id}>
+                    <td className="px-4 py-2">{l.description}</td>
+                    <td className="num px-4 py-2 text-right">{formatEuro(l.revenue)}</td>
+                    <td className="num px-4 py-2 text-right text-muted">{l.plannedCost !== null ? formatEuro(l.plannedCost) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="border-t border-border font-semibold">
+                <tr>
+                  <td className="px-4 py-2">Totale (IVA esclusa)</td>
+                  <td className="num px-4 py-2 text-right">{formatEuro(budget.revenue)}</td>
+                  <td className="num px-4 py-2 text-right">{budget.hasCosts ? formatEuro(budget.plannedCost) : "—"}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          {budget.hasCosts && (
+            <p className="text-sm text-muted">
+              Margine previsto: <span className="num font-semibold text-text">{formatEuro(budget.revenue - budget.plannedCost)}</span>. I
+              costi reali contro questo budget arrivano con il modulo Margine.
+            </p>
+          )}
+        </section>
+      )}
 
       <section aria-labelledby="tasks-title" className="space-y-3">
         <h2 id="tasks-title" className="flex items-center gap-3 font-[family-name:var(--font-display)] text-lg font-semibold">
