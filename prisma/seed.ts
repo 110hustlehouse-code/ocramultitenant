@@ -45,6 +45,8 @@ async function main() {
       colorDark: "#B066FF",
       logoUrl: "/brands/fulcro-lucem.png",
       logoBg: "#FFFFFF",
+      // TODO: IBAN reale da inserire (via pagina «Impostazioni società», ancora da fare).
+      quoteFooter: "Bonifico bancario · IBAN da completare · Fulcro Lucem S.r.l.",
       sortOrder: 1,
     },
     {
@@ -62,6 +64,11 @@ async function main() {
       colorDark: "#FF6304",
       logoUrl: "/brands/duit.png",
       logoBg: "#FF6301",
+      // I preventivi reali di Duit non usano colore (nero/grigio): il PDF resta neutro,
+      // colorLight/colorDark restano per il resto dell'app (branding, tema).
+      pdfAccent: false,
+      // TODO: IBAN reale da inserire (via pagina «Impostazioni società», ancora da fare).
+      quoteFooter: "Bonifico bancario · IBAN da completare · Duit S.r.l.",
       sortOrder: 2,
     },
     {
@@ -72,6 +79,8 @@ async function main() {
       colorDark: "#3ED7FB",
       logoUrl: "/brands/start-factory.png",
       logoBg: "#090909",
+      // Nessun preventivo reale ancora disponibile: ripiego sullo stile neutro di Duit.
+      pdfAccent: false,
       sortOrder: 3,
     },
   ];

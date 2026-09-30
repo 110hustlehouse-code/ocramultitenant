@@ -7,7 +7,7 @@ import { AcceptForm, MarkSentButton, RejectForm } from "@/components/quotes/Quot
 import { buttonClass, CompanyTag } from "@/components/registry/ui";
 import { cn } from "@/lib/cn";
 import { formatDay } from "@/lib/dates";
-import { formatEuro, QUOTE_STATUS, quoteLabel } from "@/lib/quotes";
+import { formatEuro, QUOTE_STATUS, quoteLabel, quoteTotals } from "@/lib/quotes";
 import { requireModule } from "@/server/context";
 import { getQuote, listServiceItems, managerCandidates, suggestProjectCode } from "@/server/quotes/service";
 import { deleteDraftAction, duplicateQuoteAction, milestoneAction } from "../actions";
@@ -95,6 +95,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
                 quantity: Number(l.quantity),
                 unit: l.unit,
                 unitPrice: l.unitPrice,
+                discountPercent: l.discountPercent !== null ? Number(l.discountPercent) : null,
+                vatRate: l.vatRate,
                 plannedCost: l.plannedCost,
               })),
             }}
@@ -110,58 +112,72 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         </>
       )}
 
-      {quote.status !== "BOZZA" && (
-        <section aria-labelledby="lines-title" className="space-y-3">
-          <h2 id="lines-title" className="font-[family-name:var(--font-display)] text-lg font-semibold">
-            Voci
-          </h2>
-          {quote.intro && <p className="max-w-prose text-sm">{quote.intro}</p>}
-          <div className="overflow-x-auto rounded-xl border border-border bg-surface">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead>
-                <tr className="border-b border-border text-left">
-                  <th className="label px-4 py-2 font-normal">Descrizione</th>
-                  <th className="label px-4 py-2 text-right font-normal">Q.tà</th>
-                  <th className="label px-4 py-2 text-right font-normal">Prezzo</th>
-                  <th className="label px-4 py-2 text-right font-normal">Importo</th>
-                  <th className="label px-4 py-2 text-right font-normal">Costo prev.</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {quote.lines.map((l) => (
-                  <tr key={l.id}>
-                    <td className="px-4 py-2">{l.description}</td>
-                    <td className="num px-4 py-2 text-right">
-                      {qty(Number(l.quantity))} {l.unit}
-                    </td>
-                    <td className="num px-4 py-2 text-right">{formatEuro(l.unitPrice)}</td>
-                    <td className="num px-4 py-2 text-right">{formatEuro(l.total)}</td>
-                    <td className="num px-4 py-2 text-right text-muted">{l.plannedCost !== null ? formatEuro(l.plannedCost) : "—"}</td>
+      {quote.status !== "BOZZA" && (() => {
+        const hasDiscount = quote.lines.some((l) => l.discountPercent !== null);
+        const groups = quoteTotals(
+          quote.lines.map((l) => ({
+            quantity: Number(l.quantity),
+            unitPrice: l.unitPrice,
+            discountPercent: l.discountPercent !== null ? Number(l.discountPercent) : null,
+            vatRate: l.vatRate,
+          })),
+        ).groups;
+        const labelCols = hasDiscount ? 4 : 3;
+        return (
+          <section aria-labelledby="lines-title" className="space-y-3">
+            <h2 id="lines-title" className="font-[family-name:var(--font-display)] text-lg font-semibold">
+              Voci
+            </h2>
+            {quote.intro && <p className="max-w-prose text-sm">{quote.intro}</p>}
+            <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+              <table className="w-full min-w-[640px] text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left">
+                    <th className="label px-4 py-2 font-normal">Descrizione</th>
+                    <th className="label px-4 py-2 text-right font-normal">Q.tà</th>
+                    <th className="label px-4 py-2 text-right font-normal">Prezzo</th>
+                    {hasDiscount && <th className="label px-4 py-2 text-right font-normal">Sconto</th>}
+                    <th className="label px-4 py-2 text-right font-normal">Importo</th>
+                    <th className="label px-4 py-2 text-right font-normal">Costo prev.</th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot className="border-t border-border">
-                {(
-                  [
-                    ["Imponibile", quote.subtotal, false],
-                    [`IVA ${quote.vatRate}%`, quote.vat, false],
-                    ["Totale", quote.total, true],
-                  ] as const
-                ).map(([text, amount, strong]) => (
-                  <tr key={text}>
-                    <td className={cn("px-4 py-1 text-right", strong && "font-semibold")} colSpan={3}>
-                      {text}
-                    </td>
-                    <td className={cn("num px-4 py-1 text-right", strong && "font-semibold")}>{formatEuro(amount)}</td>
-                    <td />
-                  </tr>
-                ))}
-              </tfoot>
-            </table>
-          </div>
-          {quote.terms && <p className="whitespace-pre-wrap text-sm text-muted">{quote.terms}</p>}
-        </section>
-      )}
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {quote.lines.map((l) => (
+                    <tr key={l.id}>
+                      <td className="px-4 py-2">{l.description}</td>
+                      <td className="num px-4 py-2 text-right">
+                        {qty(Number(l.quantity))} {l.unit}
+                      </td>
+                      <td className="num px-4 py-2 text-right">{formatEuro(l.unitPrice)}</td>
+                      {hasDiscount && <td className="num px-4 py-2 text-right">{l.discountPercent !== null ? `${Number(l.discountPercent)}%` : "—"}</td>}
+                      <td className="num px-4 py-2 text-right">{formatEuro(l.total)}</td>
+                      <td className="num px-4 py-2 text-right text-muted">{l.plannedCost !== null ? formatEuro(l.plannedCost) : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t border-border">
+                  {(
+                    [
+                      ["Imponibile", quote.subtotal, false],
+                      ...groups.map((g): [string, number, boolean] => [`IVA ${g.vatRate}%`, g.vat, false]),
+                      ["Totale", quote.total, true],
+                    ] satisfies Array<[string, number, boolean]>
+                  ).map(([text, amount, strong]) => (
+                    <tr key={text}>
+                      <td className={cn("px-4 py-1 text-right", strong && "font-semibold")} colSpan={labelCols}>
+                        {text}
+                      </td>
+                      <td className={cn("num px-4 py-1 text-right", strong && "font-semibold")}>{formatEuro(amount)}</td>
+                      <td />
+                    </tr>
+                  ))}
+                </tfoot>
+              </table>
+            </div>
+            {quote.terms && <p className="whitespace-pre-wrap text-sm text-muted">{quote.terms}</p>}
+          </section>
+        );
+      })()}
 
       {quote.status === "INVIATO" && (
         <section className="space-y-3">

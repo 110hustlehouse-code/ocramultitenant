@@ -45,14 +45,40 @@ export function parseQuantity(value: string): number | null {
   return n > 0 ? n : null;
 }
 
-export function lineTotal(quantity: number, unitPrice: number): number {
-  return Math.round(quantity * unitPrice);
+/** Percentuale: «12,5», «100» → numero 0-100 con al massimo due decimali; null se non valida o vuota. */
+export function parsePercent(value: string): number | null {
+  const v = value.trim().replace(",", ".");
+  if (!v) return null;
+  if (!/^\d+(\.\d{1,2})?$/.test(v)) return null;
+  const n = Number(v);
+  return n >= 0 && n <= 100 ? n : null;
 }
 
-export function quoteTotals(lines: Array<{ quantity: number; unitPrice: number }>, vatRate: number) {
-  const subtotal = lines.reduce((sum, l) => sum + lineTotal(l.quantity, l.unitPrice), 0);
-  const vat = Math.round((subtotal * vatRate) / 100);
-  return { subtotal, vat, total: subtotal + vat };
+/** Sconto opzionale (0-100) applicato prima dell'arrotondamento. */
+export function lineTotal(quantity: number, unitPrice: number, discountPercent: number | null = null): number {
+  const gross = quantity * unitPrice;
+  return Math.round(discountPercent ? gross * (1 - discountPercent / 100) : gross);
+}
+
+export type VatGroup = { vatRate: number; subtotal: number; vat: number };
+
+/**
+ * Ogni riga porta la propria aliquota (di norma quella del preventivo, ma può differire:
+ * es. una voce di spedizione al 5% in un preventivo al 22%). I totali si calcolano per
+ * gruppo di aliquota e poi si sommano — così il "Riepilogo IVA" del PDF può elencarli.
+ */
+export function quoteTotals(lines: Array<{ quantity: number; unitPrice: number; discountPercent?: number | null; vatRate: number }>) {
+  const byRate = new Map<number, number>();
+  for (const l of lines) {
+    const t = lineTotal(l.quantity, l.unitPrice, l.discountPercent ?? null);
+    byRate.set(l.vatRate, (byRate.get(l.vatRate) ?? 0) + t);
+  }
+  const groups: VatGroup[] = [...byRate.entries()]
+    .sort((a, b) => b[0] - a[0])
+    .map(([vatRate, subtotal]) => ({ vatRate, subtotal, vat: Math.round((subtotal * vatRate) / 100) }));
+  const subtotal = groups.reduce((sum, g) => sum + g.subtotal, 0);
+  const vat = groups.reduce((sum, g) => sum + g.vat, 0);
+  return { subtotal, vat, total: subtotal + vat, groups };
 }
 
 /** «n. 30/2026»: numero progressivo della società e anno di emissione. */

@@ -5,10 +5,12 @@ CREATE TYPE "QuoteStatus" AS ENUM ('BOZZA', 'INVIATO', 'ACCETTATO', 'RIFIUTATO')
 ALTER TABLE "Company" ADD COLUMN     "nextQuoteNumber" INTEGER NOT NULL DEFAULT 1,
 ADD COLUMN     "quoteFooter" TEXT,
 ADD COLUMN     "quoteTerms" TEXT,
-ADD COLUMN     "quoteValidityDays" INTEGER NOT NULL DEFAULT 30;
+ADD COLUMN     "quoteValidityDays" INTEGER NOT NULL DEFAULT 30,
+ADD COLUMN     "pdfAccent" BOOLEAN NOT NULL DEFAULT true;
 
 -- AlterTable
-ALTER TABLE "Party" ADD COLUMN     "shortCode" TEXT;
+ALTER TABLE "Party" ADD COLUMN     "shortCode" TEXT,
+ADD COLUMN     "address" TEXT;
 
 -- CreateTable
 CREATE TABLE "ServiceItem" (
@@ -71,6 +73,8 @@ CREATE TABLE "QuoteLine" (
     "quantity" DECIMAL(10,2) NOT NULL,
     "unit" TEXT NOT NULL,
     "unitPrice" INTEGER NOT NULL,
+    "discountPercent" DECIMAL(5,2),
+    "vatRate" INTEGER NOT NULL,
     "total" INTEGER NOT NULL,
     "plannedCost" INTEGER,
     "sortOrder" INTEGER NOT NULL DEFAULT 0,

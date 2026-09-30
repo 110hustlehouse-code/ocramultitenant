@@ -24,6 +24,7 @@ const company = (slug: string): Company => ({
   quoteTerms: null,
   quoteValidityDays: 30,
   quoteFooter: null,
+  pdfAccent: true,
   sortOrder: 0,
   active: true,
   createdAt: new Date(),

@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { Document, Font, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import { safeHex } from "@/lib/color";
-import { formatEuro, quoteLabel } from "@/lib/quotes";
+import { formatEuro, quoteLabel, quoteTotals } from "@/lib/quotes";
 import type { QuoteWithLines } from "./service";
 
 /**
@@ -62,10 +62,11 @@ const s = StyleSheet.create({
   subject: { fontSize: 11, fontWeight: 600, marginBottom: 6 },
   para: { marginBottom: 12 },
   th: { flexDirection: "row", borderBottomWidth: 1, borderColor: ink, paddingBottom: 4, marginTop: 6 },
-  tr: { flexDirection: "row", borderBottomWidth: 0.5, borderColor: rule, paddingVertical: 6 },
+  tr: { flexDirection: "row", paddingVertical: 6, paddingHorizontal: 4 },
+  trOdd: { backgroundColor: "#f4f5f7" },
   cDesc: { flex: 1, paddingRight: 8 },
-  cQty: { width: 44, textAlign: "right" },
-  cUnit: { width: 52, paddingLeft: 6 },
+  cQty: { width: 64, textAlign: "right" },
+  cDiscount: { width: 44, textAlign: "right" },
   cPrice: { width: 72, textAlign: "right" },
   cTotal: { width: 76, textAlign: "right" },
   totals: { marginTop: 10, marginLeft: "auto", width: 220 },
@@ -78,7 +79,9 @@ const s = StyleSheet.create({
 
 function QuoteDocument({ quote }: { quote: QuoteWithLines }) {
   const c = quote.company;
-  const brand = safeHex(c.colorLight, ink);
+  // Fulcro (viola): accento colore su bordi/etichette/totale. Duit, St'Art (pdfAccent=false): resta neutro,
+  // come nei documenti reali — il colore non cambia la logica, solo quale tinta usano bordi e totale.
+  const accent = c.pdfAccent ? safeHex(c.colorLight, ink) : ink;
   const logo = logoSource(c.logoUrl);
   const legal = [
     c.legalAddress,
@@ -90,6 +93,15 @@ function QuoteDocument({ quote }: { quote: QuoteWithLines }) {
   const client = quote.client;
   const clientIds = [client.vatNumber && `P.IVA ${client.vatNumber}`, client.taxCode && `C.F. ${client.taxCode}`].filter(Boolean).join(" · ");
   const label = quoteLabel(quote.number, quote.issueDate);
+  const hasDiscount = quote.lines.some((l) => l.discountPercent !== null);
+  const vatGroups = quoteTotals(
+    quote.lines.map((l) => ({
+      quantity: Number(l.quantity),
+      unitPrice: l.unitPrice,
+      discountPercent: l.discountPercent !== null ? Number(l.discountPercent) : null,
+      vatRate: l.vatRate,
+    })),
+  ).groups;
 
   return (
     <Document title={`Preventivo ${label} — ${quote.title}`} author={c.legalName ?? c.name} creator={c.name} producer={c.name}>
@@ -101,7 +113,7 @@ function QuoteDocument({ quote }: { quote: QuoteWithLines }) {
               <Image src={logo} style={s.logo} />
             </View>
           ) : (
-            <Text style={[s.companyName, { color: brand }]}>{c.name}</Text>
+            <Text style={[s.companyName, { color: accent }]}>{c.name}</Text>
           )}
           <View style={s.companyBlock}>
             <Text style={s.companyName}>{c.legalName ?? c.name}</Text>
@@ -129,10 +141,11 @@ function QuoteDocument({ quote }: { quote: QuoteWithLines }) {
         </View>
 
         <View style={s.parties}>
-          <View style={[s.box, { borderColor: brand }]}>
+          <View style={[s.box, { borderColor: accent }]}>
             <Text style={s.label}>Spettabile</Text>
             <Text style={s.strong}>{client.name}</Text>
             {clientIds && <Text>{clientIds}</Text>}
+            {client.address?.split("\n").map((line) => <Text key={line}>{line}</Text>)}
             {client.contactName && <Text>Alla c.a. di {client.contactName}</Text>}
           </View>
           <View style={[s.box, { borderColor: rule }]}>
@@ -146,31 +159,43 @@ function QuoteDocument({ quote }: { quote: QuoteWithLines }) {
 
         <View style={s.th} fixed>
           <Text style={[s.label, s.cDesc]}>Descrizione</Text>
-          <Text style={[s.label, s.cQty]}>Q.tà</Text>
-          <Text style={[s.label, s.cUnit]}>Unità</Text>
+          <Text style={[s.label, s.cQty]}>Quantità</Text>
+          {hasDiscount && <Text style={[s.label, s.cDiscount]}>Sconto</Text>}
           <Text style={[s.label, s.cPrice]}>Prezzo</Text>
           <Text style={[s.label, s.cTotal]}>Importo</Text>
         </View>
-        {quote.lines.map((l) => (
-          <View key={l.id} style={s.tr} wrap={false}>
-            <Text style={s.cDesc}>{l.description}</Text>
-            <Text style={s.cQty}>{qty(Number(l.quantity))}</Text>
-            <Text style={s.cUnit}>{l.unit}</Text>
-            <Text style={s.cPrice}>{formatEuro(l.unitPrice)}</Text>
-            <Text style={s.cTotal}>{formatEuro(l.total)}</Text>
-          </View>
-        ))}
+        {quote.lines.map((l, i) => {
+          const [heading, ...rest] = l.description.split("\n");
+          return (
+            <View key={l.id} style={[s.tr, i % 2 === 1 ? s.trOdd : undefined]} wrap={false}>
+              <View style={s.cDesc}>
+                <Text style={rest.length ? s.strong : undefined}>{heading}</Text>
+                {rest.map((line, j) => (
+                  <Text key={j}>{line}</Text>
+                ))}
+              </View>
+              <Text style={s.cQty}>
+                {qty(Number(l.quantity))} {l.unit}
+              </Text>
+              {hasDiscount && <Text style={s.cDiscount}>{l.discountPercent !== null ? `${Number(l.discountPercent)}%` : ""}</Text>}
+              <Text style={s.cPrice}>{formatEuro(l.unitPrice)}</Text>
+              <Text style={s.cTotal}>{formatEuro(l.total)}</Text>
+            </View>
+          );
+        })}
 
         <View style={s.totals} wrap={false}>
           <View style={s.totalRow}>
             <Text>Imponibile</Text>
             <Text>{formatEuro(quote.subtotal)}</Text>
           </View>
-          <View style={s.totalRow}>
-            <Text>IVA {quote.vatRate}%</Text>
-            <Text>{formatEuro(quote.vat)}</Text>
-          </View>
-          <View style={[s.grand, { borderColor: brand }]}>
+          {vatGroups.map((g) => (
+            <View key={g.vatRate} style={s.totalRow}>
+              <Text>IVA {g.vatRate}%</Text>
+              <Text>{formatEuro(g.vat)}</Text>
+            </View>
+          ))}
+          <View style={[s.grand, { borderColor: accent }]}>
             <Text style={s.grandText}>Totale</Text>
             <Text style={s.grandText}>{formatEuro(quote.total)}</Text>
           </View>

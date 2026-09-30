@@ -148,6 +148,9 @@ export const lineInputSchema = z.object({
   quantity: z.number().positive("Quantità non valida").max(100_000),
   unit: z.string().trim().min(1).max(30),
   unitPrice: z.number().int().min(0, "Prezzo non valido"),
+  /// Mai proposto dall'AI: lo aggiunge il CEO a mano.
+  discountPercent: z.number().min(0).max(100).nullable(),
+  vatRate: z.number().int().min(0).max(30),
   plannedCost: z.number().int().min(0).nullable(),
 });
 export type LineInput = z.infer<typeof lineInputSchema>;
@@ -182,7 +185,7 @@ export async function saveDraft(ctx: AppContext, id: string, input: DraftInput) 
   const known = await ctx.db.serviceItem.count({ where: { id: { in: itemIds }, companyId: quote.companyId } });
   if (known !== itemIds.length) throw new QuoteError("Una voce di listino non è di questa società.");
 
-  const totals = quoteTotals(d.lines, d.vatRate);
+  const { subtotal, vat, total } = quoteTotals(d.lines);
   await ctx.db.$transaction(async (tx) => {
     await tx.quoteLine.deleteMany({ where: { quoteId: id } });
     if (d.lines.length) {
@@ -195,7 +198,9 @@ export async function saveDraft(ctx: AppContext, id: string, input: DraftInput) 
           quantity: new Prisma.Decimal(l.quantity.toFixed(2)),
           unit: l.unit,
           unitPrice: l.unitPrice,
-          total: lineTotal(l.quantity, l.unitPrice),
+          discountPercent: l.discountPercent !== null ? new Prisma.Decimal(l.discountPercent.toFixed(2)) : null,
+          vatRate: l.vatRate,
+          total: lineTotal(l.quantity, l.unitPrice, l.discountPercent),
           plannedCost: l.plannedCost,
           sortOrder: i,
         })),
@@ -210,7 +215,9 @@ export async function saveDraft(ctx: AppContext, id: string, input: DraftInput) 
         terms: d.terms || null,
         validUntil: d.validUntil ? parseDay(d.validUntil) : null,
         vatRate: d.vatRate,
-        ...totals,
+        subtotal,
+        vat,
+        total,
       },
     });
   });
@@ -341,6 +348,8 @@ export async function duplicateQuote(ctx: AppContext, id: string) {
       quantity: Number(l.quantity),
       unit: l.unit,
       unitPrice: l.unitPrice,
+      discountPercent: l.discountPercent !== null ? Number(l.discountPercent) : null,
+      vatRate: l.vatRate,
       plannedCost: l.plannedCost,
     })),
   });

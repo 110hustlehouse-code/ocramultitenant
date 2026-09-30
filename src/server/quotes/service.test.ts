@@ -46,9 +46,9 @@ describe.skipIf(!url)("preventivi sul database", () => {
     validUntil: "2026-10-31",
     vatRate: 22,
     lines: [
-      { serviceItemId: service, description: "Service audio e luci", quantity: 2, unit: "giorno", unitPrice: 240_000, plannedCost: 340_000 },
-      { serviceItemId: riprese, description: "Riprese", quantity: 1.5, unit: "giorno", unitPrice: 150_000, plannedCost: null },
-      { serviceItemId: null, description: "Catering", quantity: 1, unit: "forfait", unitPrice: 50_000, plannedCost: 40_000 },
+      { serviceItemId: service, description: "Service audio e luci", quantity: 2, unit: "giorno", unitPrice: 240_000, discountPercent: null, vatRate: 22, plannedCost: 340_000 },
+      { serviceItemId: riprese, description: "Riprese", quantity: 1.5, unit: "giorno", unitPrice: 150_000, discountPercent: null, vatRate: 22, plannedCost: null },
+      { serviceItemId: null, description: "Catering", quantity: 1, unit: "forfait", unitPrice: 50_000, discountPercent: null, vatRate: 22, plannedCost: 40_000 },
     ],
     ...over,
   });
@@ -112,11 +112,44 @@ describe.skipIf(!url)("preventivi sul database", () => {
       ["Catering", 1, 50_000],
     ]);
     await expect(
-      saveDraft(asCeo(), q.id, draft({ lines: [{ serviceItemId: foreign, description: "Brand", quantity: 1, unit: "forfait", unitPrice: 1, plannedCost: null }] })),
+      saveDraft(
+        asCeo(),
+        q.id,
+        draft({ lines: [{ serviceItemId: foreign, description: "Brand", quantity: 1, unit: "forfait", unitPrice: 1, discountPercent: null, vatRate: 22, plannedCost: null }] }),
+      ),
     ).rejects.toThrow(/non è di questa società/);
-    await expect(saveDraft(asCeo(), q.id, draft({ lines: [{ serviceItemId: null, description: "X", quantity: 1, unit: "x", unitPrice: -5, plannedCost: null }] }))).rejects.toThrow(
-      /Voce 1/,
+    await expect(
+      saveDraft(
+        asCeo(),
+        q.id,
+        draft({ lines: [{ serviceItemId: null, description: "X", quantity: 1, unit: "x", unitPrice: -5, discountPercent: null, vatRate: 22, plannedCost: null }] }),
+      ),
+    ).rejects.toThrow(/Voce 1/);
+  });
+
+  it("sconto per riga e aliquote miste: il PDF ha una riga di Riepilogo IVA per aliquota", async () => {
+    const q = await createQuote(asCeo(), { companyId: ap.id, clientId: teatro, title: "Sconto e spedizione" });
+    await saveDraft(
+      asCeo(),
+      q.id,
+      draft({
+        lines: [
+          // 2×2400€ - 12,5% = 4200,00€, IVA 22%
+          { serviceItemId: service, description: "Service audio e luci", quantity: 2, unit: "giorno", unitPrice: 240_000, discountPercent: 12.5, vatRate: 22, plannedCost: 340_000 },
+          // Voce di spedizione fuori listino a un'aliquota diversa, come nei preventivi reali di Fulcro
+          { serviceItemId: null, description: "Spedizione", quantity: 1, unit: "forfait", unitPrice: 3_000, discountPercent: null, vatRate: 5, plannedCost: null },
+        ],
+      }),
     );
+    const saved = (await getQuote(asCeo(), q.id))!;
+    expect(saved.lines[0]).toMatchObject({ total: 420_000, discountPercent: expect.anything() });
+    expect(Number(saved.lines[0]!.discountPercent)).toBe(12.5);
+    // 420000 al 22% = 92400; 3000 al 5% = 150 → totale IVA 92550, imponibile 423000
+    expect(saved).toMatchObject({ subtotal: 423_000, vat: 92_550, total: 515_550 });
+
+    const pdf = await renderQuotePdf(saved);
+    expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(pdf.length).toBeGreaterThan(5_000);
   });
 
   it("inviato → non si modifica; accettato → nasce il progetto con codice PO, PM e budget", async () => {
@@ -189,7 +222,18 @@ describe.skipIf(!url)("preventivi sul database", () => {
       return {
         title: null,
         intro: "Vi proponiamo il service per la serata.",
-        lines: [{ serviceItemId: service, description: "Service audio e luci, 2 giorni", quantity: 2, unit: "giorno", unitPrice: 240_000, plannedCost: 340_000 }],
+        lines: [
+          {
+            serviceItemId: service,
+            description: "Service audio e luci, 2 giorni",
+            quantity: 2,
+            unit: "giorno",
+            unitPrice: 240_000,
+            discountPercent: null,
+            vatRate: 22,
+            plannedCost: 340_000,
+          },
+        ],
         notes: ["Date da confermare"],
       };
     });

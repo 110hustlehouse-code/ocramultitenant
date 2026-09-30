@@ -5,7 +5,14 @@ import type { AppContext } from "@/server/context";
 import { buildQuotePrompt, normalizeDraft, QUOTE_DRAFT_SCHEMA, QUOTE_SYSTEM_PROMPT, type CatalogItem, type DraftProposal, type PastQuote } from "./draft";
 import { getQuote, listServiceItems, QuoteError, saveDraft } from "./service";
 
-export type DraftWriter = (input: { brief: string; companyName: string; clientName: string; catalog: CatalogItem[]; past: PastQuote[] }) => Promise<DraftProposal>;
+export type DraftWriter = (input: {
+  brief: string;
+  companyName: string;
+  clientName: string;
+  catalog: CatalogItem[];
+  past: PastQuote[];
+  defaultVatRate: number;
+}) => Promise<DraftProposal>;
 
 /** Chiama Claude con structured outputs: la risposta è sempre JSON conforme a QUOTE_DRAFT_SCHEMA. */
 export const writeDraft: DraftWriter = async (input) => {
@@ -24,7 +31,7 @@ export const writeDraft: DraftWriter = async (input) => {
   const text = res.content.find((b) => b.type === "text");
   if (!text || text.type !== "text") throw new QuoteError("L'AI non ha restituito le voci. Riprova.");
   try {
-    return normalizeDraft(JSON.parse(text.text), input.catalog);
+    return normalizeDraft(JSON.parse(text.text), input.catalog, input.defaultVatRate);
   } catch {
     throw new QuoteError("L'AI ha restituito una proposta illeggibile. Riprova.");
   }
@@ -62,6 +69,7 @@ export async function proposeDraft(ctx: AppContext, id: string, brief: string, w
       status: q.status,
       lines: q.lines.map((l) => ({ description: l.description, quantity: Number(l.quantity), unit: l.unit, unitPrice: l.unitPrice })),
     })),
+    defaultVatRate: quote.vatRate,
   });
   if (proposal.lines.length === 0) throw new QuoteError("Claude non ha trovato voci adatte nel listino. Rivedi il brief.");
 

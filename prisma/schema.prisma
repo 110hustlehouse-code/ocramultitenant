@@ -97,6 +97,9 @@ model Company {
   quoteValidityDays   Int      @default(30)
   /// Piè di pagina del preventivo (IBAN, note)
   quoteFooter         String?
+  /// Il PDF del preventivo usa colorLight/colorDark su bordi, etichette e totale.
+  /// A false resta in inchiostro neutro (es. Duit, St'Art: nessun accento colore nei documenti reali).
+  pdfAccent           Boolean  @default(true)
   sortOrder           Int      @default(0)
   active              Boolean  @default(true)
   createdAt           DateTime @default(now())
@@ -188,6 +191,8 @@ model Party {
   taxCode     String?
   pec         String?
   sdiCode     String?
+  /// Indirizzo per l'intestazione del preventivo (via, CAP, città); compare solo se presente
+  address     String?
   /// Referente: nome, email e cellulare
   contactName String?
   email       String?
@@ -633,7 +638,8 @@ model Quote {
   validUntil        DateTime?
   intro             String?
   terms             String?
-  /// Aliquota IVA unica del preventivo, in percentuale
+  /// Aliquota IVA predefinita per le nuove righe, in percentuale (ogni riga può avere la propria:
+  /// il "Riepilogo IVA" nel PDF raggruppa per aliquota effettiva, come nei preventivi reali)
   vatRate           Int         @default(22)
   /// Importi in centesimi, ricalcolati dal server a ogni salvataggio
   subtotal          Int         @default(0)
@@ -677,6 +683,10 @@ model QuoteLine {
   unit          String
   /// Centesimi
   unitPrice     Int
+  /// Percentuale (0-100); null = nessuno sconto. Mai proposto dall'AI, lo aggiunge il CEO.
+  discountPercent Decimal? @db.Decimal(5, 2)
+  /// Aliquota IVA di questa riga (di norma quella del preventivo al momento della creazione)
+  vatRate       Int
   total         Int
   /// Costo previsto (interno, mai nel PDF), in centesimi: diventa il costo di budget
   plannedCost   Int?

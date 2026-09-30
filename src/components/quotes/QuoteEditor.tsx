@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import { buttonClass, Field, inputClass } from "@/components/registry/ui";
-import { formatAmount, formatEuro, lineTotal, parseEuro, parseQuantity, quoteTotals } from "@/lib/quotes";
+import { formatAmount, formatEuro, lineTotal, parseEuro, parsePercent, parseQuantity, quoteTotals } from "@/lib/quotes";
 import { proposeDraftAction, saveDraftAction } from "@/app/(app)/preventivi/actions";
 
 export type CatalogOption = { id: string; name: string; description: string | null; unit: string; unitPrice: number; unitCost: number | null };
@@ -16,6 +16,9 @@ type LineState = {
   quantity: string;
   unit: string;
   unitPrice: string;
+  /// Vuoto = nessuno sconto
+  discountPercent: string;
+  vatRate: string;
   plannedCost: string;
 };
 
@@ -28,7 +31,16 @@ export type EditorQuote = {
   validUntil: string;
   vatRate: number;
   brief: string;
-  lines: Array<{ serviceItemId: string | null; description: string; quantity: number; unit: string; unitPrice: number; plannedCost: number | null }>;
+  lines: Array<{
+    serviceItemId: string | null;
+    description: string;
+    quantity: number;
+    unit: string;
+    unitPrice: number;
+    discountPercent: number | null;
+    vatRate: number;
+    plannedCost: number | null;
+  }>;
 };
 
 const euroInput = (cents: number | null) => (cents === null ? "" : formatAmount(cents));
@@ -53,6 +65,8 @@ export function QuoteEditor({ quote, clients, catalog }: { quote: EditorQuote; c
       quantity: qtyInput(l.quantity),
       unit: l.unit,
       unitPrice: euroInput(l.unitPrice),
+      discountPercent: l.discountPercent === null ? "" : String(l.discountPercent),
+      vatRate: String(l.vatRate),
       plannedCost: euroInput(l.plannedCost),
     })),
   );
@@ -66,18 +80,22 @@ export function QuoteEditor({ quote, clients, catalog }: { quote: EditorQuote; c
 
   const parsed = lines.map((l) => {
     const plannedCost = l.plannedCost.trim() ? parseEuro(l.plannedCost) : null;
+    const discountPercent = l.discountPercent.trim() ? parsePercent(l.discountPercent) : null;
     return {
       quantity: parseQuantity(l.quantity),
       unitPrice: parseEuro(l.unitPrice),
+      discountPercent,
+      discountInvalid: l.discountPercent.trim() !== "" && discountPercent === null,
+      vatRate: parsePercent(l.vatRate),
       plannedCost,
       costInvalid: l.plannedCost.trim() !== "" && plannedCost === null,
     };
   });
-  const valid = parsed.every((p) => p.quantity !== null && p.unitPrice !== null && p.unitPrice >= 0 && !p.costInvalid);
-  const vat = Number(vatRate);
+  const valid = parsed.every(
+    (p) => p.quantity !== null && p.unitPrice !== null && p.unitPrice >= 0 && p.vatRate !== null && !p.discountInvalid && !p.costInvalid,
+  );
   const totals = quoteTotals(
-    parsed.map((p) => ({ quantity: p.quantity ?? 0, unitPrice: p.unitPrice ?? 0 })),
-    Number.isFinite(vat) ? vat : 0,
+    parsed.map((p) => ({ quantity: p.quantity ?? 0, unitPrice: p.unitPrice ?? 0, discountPercent: p.discountPercent, vatRate: p.vatRate ?? 0 })),
   );
   const plannedCost = parsed.reduce((s, p) => s + (p.plannedCost ?? 0), 0);
 
@@ -102,11 +120,14 @@ export function QuoteEditor({ quote, clients, catalog }: { quote: EditorQuote; c
         quantity: "1",
         unit: item.unit,
         unitPrice: euroInput(item.unitPrice),
+        discountPercent: "",
+        vatRate,
         plannedCost: euroInput(item.unitCost),
       },
     ]);
   };
 
+  const vat = Number(vatRate);
   const payload = JSON.stringify({
     title,
     clientId,
@@ -120,6 +141,8 @@ export function QuoteEditor({ quote, clients, catalog }: { quote: EditorQuote; c
       quantity: parsed[i]!.quantity ?? 0,
       unit: l.unit,
       unitPrice: parsed[i]!.unitPrice ?? -1,
+      discountPercent: parsed[i]!.discountPercent,
+      vatRate: parsed[i]!.vatRate ?? -1,
       plannedCost: parsed[i]!.plannedCost,
     })),
   });
@@ -183,13 +206,19 @@ export function QuoteEditor({ quote, clients, catalog }: { quote: EditorQuote; c
         <div className="space-y-2">
           <p className="label">Voci</p>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[920px] text-sm">
               <thead>
                 <tr className="text-left">
                   <th className="label px-1 py-1 font-normal">Descrizione</th>
                   <th className="label w-20 px-1 py-1 font-normal">Q.tà</th>
                   <th className="label w-24 px-1 py-1 font-normal">Unità</th>
                   <th className="label w-28 px-1 py-1 font-normal">Prezzo €</th>
+                  <th className="label w-20 px-1 py-1 font-normal" title="Facoltativo: non compare nel PDF se vuoto per tutte le voci">
+                    Sconto %
+                  </th>
+                  <th className="label w-20 px-1 py-1 font-normal" title="Di norma quella del preventivo; cambiala solo per un caso misto">
+                    IVA %
+                  </th>
                   <th className="label w-28 px-1 py-1 font-normal" title="Interno: non va nel PDF">
                     Costo prev. €
                   </th>
@@ -235,6 +264,25 @@ export function QuoteEditor({ quote, clients, catalog }: { quote: EditorQuote; c
                       </td>
                       <td className="px-1 py-1">
                         <input
+                          value={l.discountPercent}
+                          onChange={(e) => update(l.key, { discountPercent: e.target.value })}
+                          aria-label={`Sconto voce ${i + 1}`}
+                          aria-invalid={p.discountInvalid}
+                          placeholder="—"
+                          className={inputClass}
+                        />
+                      </td>
+                      <td className="px-1 py-1">
+                        <input
+                          value={l.vatRate}
+                          onChange={(e) => update(l.key, { vatRate: e.target.value })}
+                          aria-label={`Aliquota IVA voce ${i + 1}`}
+                          aria-invalid={p.vatRate === null}
+                          className={inputClass}
+                        />
+                      </td>
+                      <td className="px-1 py-1">
+                        <input
                           value={l.plannedCost}
                           onChange={(e) => update(l.key, { plannedCost: e.target.value })}
                           aria-label={`Costo previsto voce ${i + 1}`}
@@ -243,7 +291,7 @@ export function QuoteEditor({ quote, clients, catalog }: { quote: EditorQuote; c
                         />
                       </td>
                       <td className="num px-1 py-2 text-right">
-                        {p.quantity !== null && p.unitPrice !== null ? formatEuro(lineTotal(p.quantity, p.unitPrice)) : "—"}
+                        {p.quantity !== null && p.unitPrice !== null ? formatEuro(lineTotal(p.quantity, p.unitPrice, p.discountPercent)) : "—"}
                       </td>
                       <td className="px-1 py-1">
                         <div className="flex justify-end gap-1">
@@ -280,7 +328,12 @@ export function QuoteEditor({ quote, clients, catalog }: { quote: EditorQuote; c
             </select>
             <button
               type="button"
-              onClick={() => setLines((ls) => [...ls, { key: key(), serviceItemId: null, description: "", quantity: "1", unit: "forfait", unitPrice: "", plannedCost: "" }])}
+              onClick={() =>
+                setLines((ls) => [
+                  ...ls,
+                  { key: key(), serviceItemId: null, description: "", quantity: "1", unit: "forfait", unitPrice: "", discountPercent: "", vatRate, plannedCost: "" },
+                ])
+              }
               className={buttonClass.secondary}
             >
               <Plus className="size-4" aria-hidden /> Voce libera
@@ -293,7 +346,7 @@ export function QuoteEditor({ quote, clients, catalog }: { quote: EditorQuote; c
             <Field label="Valido fino al" name="validUntil">
               <input id="validUntil" type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} className={inputClass} />
             </Field>
-            <Field label="IVA %" name="vatRate">
+            <Field label="IVA % predefinita (nuove voci)" name="vatRate">
               <input id="vatRate" inputMode="numeric" value={vatRate} onChange={(e) => setVatRate(e.target.value)} className={inputClass} />
             </Field>
           </div>
@@ -302,10 +355,12 @@ export function QuoteEditor({ quote, clients, catalog }: { quote: EditorQuote; c
               <dt>Imponibile</dt>
               <dd>{formatEuro(totals.subtotal)}</dd>
             </div>
-            <div className="flex justify-between gap-6">
-              <dt>IVA {vatRate}%</dt>
-              <dd>{formatEuro(totals.vat)}</dd>
-            </div>
+            {totals.groups.map((g) => (
+              <div key={g.vatRate} className="flex justify-between gap-6">
+                <dt>IVA {g.vatRate}%</dt>
+                <dd>{formatEuro(g.vat)}</dd>
+              </div>
+            ))}
             <div className="flex justify-between gap-6 border-t border-border pt-1 text-base font-semibold">
               <dt>Totale</dt>
               <dd>{formatEuro(totals.total)}</dd>

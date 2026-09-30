@@ -36,17 +36,36 @@ describe("proposta di Claude per il preventivo", () => {
         notes: ["Mancano le date"],
       },
       catalog,
+      22,
     );
     expect(out.lines).toEqual([
-      { serviceItemId: "s1", description: "Service audio e luci per la serata", quantity: 2, unit: "giorno", unitPrice: 240_000, plannedCost: 340_000 },
-      { serviceItemId: null, description: "Catering", quantity: 80, unit: "coperti", unitPrice: 0, plannedCost: null },
-      { serviceItemId: "s2", description: "Riprese", quantity: 1, unit: "giorno", unitPrice: 150_000, plannedCost: null },
+      {
+        serviceItemId: "s1",
+        description: "Service audio e luci per la serata",
+        quantity: 2,
+        unit: "giorno",
+        unitPrice: 240_000,
+        discountPercent: null,
+        vatRate: 22,
+        plannedCost: 340_000,
+      },
+      { serviceItemId: null, description: "Catering", quantity: 80, unit: "coperti", unitPrice: 0, discountPercent: null, vatRate: 22, plannedCost: null },
+      {
+        serviceItemId: "s2",
+        description: "Riprese",
+        quantity: 1,
+        unit: "giorno",
+        unitPrice: 150_000,
+        discountPercent: null,
+        vatRate: 22,
+        plannedCost: null,
+      },
     ]);
     expect(out.notes).toEqual(["Mancano le date", "Una voce è fuori listino: il prezzo è da inserire."]);
     expect(out.title).toBe("Serata di apertura");
   });
 
   it("risposta malformata: errore", () => {
-    expect(() => normalizeDraft({ lines: "no" }, catalog)).toThrow();
+    expect(() => normalizeDraft({ lines: "no" }, catalog, 22)).toThrow();
   });
 });

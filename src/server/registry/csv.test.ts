@@ -23,6 +23,7 @@ const company = (id: string, name: string, legalName: string, poPrefix: string):
   quoteTerms: null,
   quoteValidityDays: 30,
   quoteFooter: null,
+  pdfAccent: true,
   sortOrder: 0,
   active: true,
   createdAt: new Date(),

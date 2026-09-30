@@ -94,8 +94,11 @@ const rawSchema = z.object({
 
 export type DraftProposal = { title: string | null; intro: string; lines: LineInput[]; notes: string[] };
 
-/** Rende sicura la proposta: id sconosciuti → voce fuori listino a zero; prezzi e costi dal listino. */
-export function normalizeDraft(raw: unknown, catalog: CatalogItem[]): DraftProposal {
+/**
+ * Rende sicura la proposta: id sconosciuti → voce fuori listino a zero; prezzi e costi dal listino.
+ * Sconto sempre assente e aliquota sempre quella predefinita del preventivo: l'AI non inventa né sconti né aliquote fuori standard.
+ */
+export function normalizeDraft(raw: unknown, catalog: CatalogItem[], defaultVatRate: number): DraftProposal {
   const parsed = rawSchema.parse(raw);
   const byId = new Map(catalog.map((c) => [c.id, c]));
   const notes = parsed.notes.map((n) => n.trim()).filter(Boolean).slice(0, 10);
@@ -112,10 +115,21 @@ export function normalizeDraft(raw: unknown, catalog: CatalogItem[]): DraftPropo
         quantity,
         unit: item.unit,
         unitPrice: item.unitPrice,
+        discountPercent: null,
+        vatRate: defaultVatRate,
         plannedCost: item.unitCost === null ? null : Math.round(quantity * item.unitCost),
       });
     } else {
-      lines.push({ serviceItemId: null, description, quantity, unit: l.unit?.trim().slice(0, 30) || "forfait", unitPrice: 0, plannedCost: null });
+      lines.push({
+        serviceItemId: null,
+        description,
+        quantity,
+        unit: l.unit?.trim().slice(0, 30) || "forfait",
+        unitPrice: 0,
+        discountPercent: null,
+        vatRate: defaultVatRate,
+        plannedCost: null,
+      });
     }
   }
   const offList = lines.filter((l) => l.serviceItemId === null).length;
