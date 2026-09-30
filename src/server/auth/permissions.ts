@@ -16,6 +16,7 @@ export const PERMISSIONS = [
   "reminders:manage",
   "followups:manage",
   "documents:read",
+  "documents:write",
   "finance:read",
   "quotes:write",
   "company:consolidated",
@@ -39,6 +40,7 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "reminders:manage",
     "followups:manage",
     "documents:read",
+    "documents:write",
     // Decisione 16 set: il PM può bloccare un account fino alla consegna.
     "hardblock:manage",
   ],

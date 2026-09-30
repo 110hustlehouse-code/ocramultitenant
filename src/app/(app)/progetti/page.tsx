@@ -44,6 +44,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
             {mine.map((t) => (
               <TaskRow
                 key={t.id}
+                projectId={t.project.id}
+                documentsEnabled={ctx.tenant.modules.includes("DOCUMENTI")}
                 canComplete
                 canManage={false}
                 own

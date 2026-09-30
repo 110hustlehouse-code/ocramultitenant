@@ -1,4 +1,4 @@
-import { Mic, Pencil } from "lucide-react";
+import { FolderOpen, Mic, Pencil } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { NewTaskForm } from "@/components/projects/NewTaskForm";
@@ -7,7 +7,7 @@ import { buttonClass, ButtonLink, CompanyTag } from "@/components/registry/ui";
 import { cn } from "@/lib/cn";
 import { formatDay } from "@/lib/dates";
 import { requireModule } from "@/server/context";
-import { isOverdue, STATUS_LABELS } from "@/server/projects/input";
+import { formatDayInput, isOverdue, STATUS_LABELS } from "@/server/projects/input";
 import { activeFollowUpsFor, canStartFollowUp } from "@/server/followups/service";
 import { assignableUsers, getProject } from "@/server/projects/service";
 import { setProjectStatusAction } from "../actions";
@@ -49,6 +49,9 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const row = (t: (typeof project.tasks)[number]) => (
     <TaskRow
       key={t.id}
+      projectId={project.id}
+      people={people}
+      documentsEnabled={ctx.tenant.modules.includes("DOCUMENTI")}
       canManage={project.canManage}
       canComplete={project.canManage || t.assigneeId === ctx.user.id}
       own={t.assigneeId === ctx.user.id}
@@ -59,6 +62,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         status: t.status,
         priority: t.priority,
         dueLabel: formatDay(t.dueDate),
+        dueDateValue: formatDayInput(t.dueDate),
+        assigneeId: t.assigneeId,
         overdue: isOverdue(t),
         assigneeName: t.assignee?.name ?? null,
         proof: t.proof,
@@ -81,8 +86,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           </p>
           <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight">{project.name}</h1>
         </div>
-        {project.canManage && (
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
+          {project.canManage && (
             <form action={setProjectStatusAction} className="flex gap-2">
               <input type="hidden" name="id" value={project.id} />
               {project.status === "ATTIVO" ? (
@@ -100,14 +105,23 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
                 </button>
               )}
             </form>
-            <ButtonLink href={`/verbali/nuovo?progetto=${project.id}`}>
-              <Mic className="size-4" aria-hidden /> Riunione
+          )}
+          {ctx.tenant.modules.includes("DOCUMENTI") && (
+            <ButtonLink href={`/documenti?progetto=${project.id}`}>
+              <FolderOpen className="size-4" aria-hidden /> Documenti
             </ButtonLink>
-            <ButtonLink href={`/progetti/${project.id}/modifica`}>
-              <Pencil className="size-4" aria-hidden /> Modifica
-            </ButtonLink>
-          </div>
-        )}
+          )}
+          {project.canManage && (
+            <>
+              <ButtonLink href={`/verbali/nuovo?progetto=${project.id}`}>
+                <Mic className="size-4" aria-hidden /> Riunione
+              </ButtonLink>
+              <ButtonLink href={`/progetti/${project.id}/modifica`}>
+                <Pencil className="size-4" aria-hidden /> Modifica
+              </ButtonLink>
+            </>
+          )}
+        </div>
       </header>
 
       <dl className="grid gap-4 rounded-xl border border-border bg-surface p-5 sm:grid-cols-3">
