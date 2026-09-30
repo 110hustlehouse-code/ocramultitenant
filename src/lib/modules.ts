@@ -67,7 +67,7 @@ export const MODULES: readonly ModuleDefinition[] = [
     permission: "documents:read",
     summary: "File di progetto e prove di chiusura dei task.",
     step: 6,
-    ready: false,
+    ready: true,
   },
   {
     key: "MARGINE",

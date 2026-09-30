@@ -66,6 +66,7 @@ model Tenant {
   projectCosts        ProjectCost[]
   reminders           Reminder[]
   accountBlocks       AccountBlock[]
+  documents           Document[]
 }
 
 /// Società del tenant (Fulcro, Duit, St'Art). Porta il branding.
@@ -149,6 +150,8 @@ model User {
   reminders           Reminder[]           @relation("ReminderRecipient")
   blocks              AccountBlock[]       @relation("BlockedUser")
   blocksIssued        AccountBlock[]       @relation("BlockedBy")
+  documentsUploaded   Document[]           @relation("DocumentUploadedBy")
+  documentsApproved   Document[]           @relation("DocumentApprovedBy")
 
   @@unique([tenantId, email])
   @@index([email])
@@ -289,6 +292,7 @@ model Project {
   meetings            Meeting[]
   meetingIntegrations MeetingIntegration[]
   followUps           ClientFollowUp[]
+  documents           Document[]
   quote               Quote?
   budgetLines         ProjectBudgetLine[]
   costs               ProjectCost[]
@@ -351,11 +355,54 @@ model Task {
   reminders   Reminder[]
   blocks      AccountBlock[]
   followUps   ClientFollowUp[]
+  documents   Document[]
 
   @@index([tenantId, projectId])
   @@index([meetingId])
   @@index([tenantId, assigneeId, status])
   @@index([budgetLineId])
+}
+
+enum DocumentStatus {
+  IN_LAVORAZIONE
+  APPROVATO
+}
+
+/// File di progetto su R2 (stessa infrastruttura degli audio dei Verbali). Più caricamenti
+/// con lo stesso nome file nello stesso progetto (`groupKey`) sono versioni successive:
+/// non si sovrascrive mai nulla su R2, lo storico resta consultabile (principio: i sorgenti si conservano).
+model Document {
+  id           String         @id @default(cuid())
+  tenantId     String
+  projectId    String
+  /// Valorizzato solo se questo file è la prova di chiusura di quel task
+  taskId       String?
+  /// Nome del file così come caricato
+  originalName String
+  /// Nome canonico generato dal sistema: Progetto_TipoFile_Versione_Data
+  displayName  String
+  /// Chiave di raggruppamento delle versioni: nome file normalizzato dentro il progetto
+  groupKey     String
+  version      Int            @default(1)
+  status       DocumentStatus @default(IN_LAVORAZIONE)
+  /// Oggetto su R2
+  key          String
+  mimeType     String
+  size         Int
+  uploadedById String?
+  approvedById String?
+  approvedAt   DateTime?
+  createdAt    DateTime       @default(now())
+
+  tenant     Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task       Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  uploadedBy User?   @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  approvedBy User?   @relation("DocumentApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, projectId, groupKey])
+  @@index([tenantId, projectId, originalName])
+  @@index([taskId])
 }
 
 enum MeetingStatus {

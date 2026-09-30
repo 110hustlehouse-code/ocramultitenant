@@ -25,6 +25,8 @@ export async function BlockedScreen({ ctx }: { ctx: AppContext }) {
           <TaskRow
             key={b.id}
             own
+            projectId={b.task.project.id}
+            documentsEnabled={ctx.tenant.modules.includes("DOCUMENTI")}
             canComplete
             canManage={false}
             task={{

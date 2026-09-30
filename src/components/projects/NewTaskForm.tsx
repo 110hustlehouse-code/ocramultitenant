@@ -52,6 +52,13 @@ export function NewTaskForm({
           ))}
         </select>
       )}
+      <textarea
+        name="description"
+        rows={2}
+        placeholder="Descrizione (facoltativa)…"
+        aria-label="Descrizione del task"
+        className={inputClass}
+      />
       {(e.title || state?.message) && <p className="text-xs text-danger">{e.title ?? state?.message}</p>}
     </form>
   );
