@@ -100,7 +100,39 @@ async function main() {
     where: { tenantId: tenant.id, slug: "fulcro-lucem", nextQuoteNumber: { lt: 30 } },
     data: { nextQuoteNumber: 30 },
   });
-  // Il listino vero di Fulcro, Duit e St'Art lo inseriscono loro (Preventivi → Listino): qui nessun prezzo inventato.
+  // Listino vero di Fulcro Lucem (da "listino servizi aggiornato.pdf", letto 30 set): prezzi "a partire da",
+  // IVA esclusa. Duit e St'Art non hanno ancora un listino reale: lo inseriscono loro da Preventivi → Listino.
+  // Il seed è la fonte di verità: ogni rilancio sostituisce il catalogo con questo elenco.
+  const fulcroServices: Array<[name: string, poCode: string, unit: string, price: number, description: string]> = [
+    ["Business Audit", "BUSINESS", "forfait", 3000, "Business Strategy, Business Model, Market Development → documento strategico con roadmap"],
+    ["Development Program", "BUSINESS", "forfait", 10000, "Business Strategy, Business Plan, Partnership, Operational, Administrative & Legal, People Development"],
+    ["Development Partnership", "BUSINESS", "mese", 3000, "Fulcro da consulente a partner: Development Program continuativo + supporto strategico, network, coordinamento"],
+    ["Project Development", "BUSINESS", "forfait", 7000, "Percorso alternativo: analisi, posizionamento, partnership, project management e legal, tutto incluso"],
+    ["Creative Direction", "CREATIVE", "forfait", 2000, "Concept creativo, vision, moodboard, reference, direzione estetica, linguaggio creativo"],
+    ["Brand Development", "CREATIVE", "forfait", 5000, "Naming, brand positioning, identità visiva, logo system, guidelines, tone of voice, storytelling"],
+    ["Campaign Development", "CREATIVE", "forfait", 4000, "Big idea, concept campagna, art direction, shooting concept, video concept, web concept"],
+    ["Experience Development", "CREATIVE", "forfait", 4500, "Concept evento, format culturali, exhibition, installazioni, esperienze immersive, attivazioni"],
+    ["Marketing Strategy", "MARKETING", "forfait", 2000, "Analisi audience, customer journey, strategia canali, piano marketing, KPI, obiettivi"],
+    ["Comunication Strategy", "MARKETING", "forfait", 3000, "Comunicazione offline, editorial planning, promozione offline, PR strategy"],
+    ["Launch Strategy", "MARKETING", "forfait", 4000, "Per brand, prodotti, artisti e progetti: piano lancio, attivazioni, partnership"],
+    ["Growth Management", "MARKETING", "mese", 1500, "Accompagnamento continuativo: analisi risultati, ottimizzazione strategie, fidelizzazione"],
+    ["Founders Program", "FOUNDERS", "mese", 450, "×12 mesi — percorso Foundation → Build → Scale per 10 founder selezionati, alto potenziale"],
+    ["Foundraising", "FOUNDRAISING", "forfait", 1000, "+ 15% sul risultato — sponsorship, bandi, investitori privati, business angel, crowdfunding, VC, finanza agevolata"],
+  ];
+  const fulcroId = bySlug.get("fulcro-lucem")!;
+  await prisma.serviceItem.deleteMany({ where: { companyId: fulcroId } });
+  await prisma.serviceItem.createMany({
+    data: fulcroServices.map(([name, poCode, unit, price, description], i) => ({
+      tenantId: tenant.id,
+      companyId: fulcroId,
+      name,
+      poCode,
+      unit,
+      unitPrice: price * 100,
+      description,
+      sortOrder: i,
+    })),
+  });
 
   // Ruoli per società (decisioni del 23 set). Email @ocra.local = accesso di sviluppo;
   // le email vere si aggiungono all'onboarding.

@@ -42,6 +42,7 @@ export const partyInputSchema = z
       .trim()
       .min(2, "Ragione sociale obbligatoria")
       .max(200, "Massimo 200 caratteri"),
+    address: optional(text(300)),
     vatNumber: optional(
       text(20)
         .transform(normalizeVat)
@@ -84,6 +85,7 @@ export function partyFromFormData(fd: FormData) {
   return {
     kind: get("kind"),
     name: get("name") ?? "",
+    address: get("address"),
     vatNumber: get("vatNumber"),
     taxCode: get("taxCode"),
     pec: get("pec"),

@@ -81,7 +81,7 @@ describe.skipIf(!url)("anagrafiche sul database", () => {
 
   it("un PM di Duit non può assegnare anagrafiche a Fulcro", async () => {
     const pmDuit = ctxFor([[duit, "PROJECT_MANAGER"]]);
-    const base = { kind: "FORNITORE" as const, name: "Noleggi Srl", vatNumber: null, taxCode: null, pec: null, sdiCode: null, contactName: null, email: null, phone: null, categories: [], notes: null };
+    const base = { kind: "FORNITORE" as const, name: "Noleggi Srl", address: null, vatNumber: null, taxCode: null, pec: null, sdiCode: null, contactName: null, email: null, phone: null, categories: [], notes: null };
     await expect(createParty(pmDuit, { ...base, companyIds: [fulcro.id] })).rejects.toThrow(RegistryError);
     const created = await createParty(pmDuit, { ...base, companyIds: [duit.id] });
     expect(created.tenantId).toBe(tenantId);
@@ -89,14 +89,14 @@ describe.skipIf(!url)("anagrafiche sul database", () => {
 
   it("P.IVA duplicata: bloccata con messaggio chiaro", async () => {
     const ceo = ctxFor([[fulcro, "CEO"]]);
-    const base = { kind: "CLIENTE" as const, name: "Doppione", vatNumber: "16633211004", taxCode: null, pec: null, sdiCode: null, contactName: null, email: null, phone: null, categories: [], notes: null, companyIds: [fulcro.id] };
+    const base = { kind: "CLIENTE" as const, name: "Doppione", address: null, vatNumber: "16633211004", taxCode: null, pec: null, sdiCode: null, contactName: null, email: null, phone: null, categories: [], notes: null, companyIds: [fulcro.id] };
     await expect(createParty(ceo, base)).rejects.toThrow(/Esiste già/);
   });
 
   it("modifica ed eliminazione toccano solo le società dell'utente", async () => {
     const z = await prisma.party.findFirstOrThrow({ where: { tenantId, vatNumber: "16633211004" } });
     const pmDuit = ctxFor([[duit, "PROJECT_MANAGER"]]);
-    const data = { kind: "CLIENTE" as const, name: "Zetema", vatNumber: "16633211004", taxCode: null, pec: null, sdiCode: null, contactName: null, email: null, phone: null, categories: [], notes: null };
+    const data = { kind: "CLIENTE" as const, name: "Zetema", address: null, vatNumber: "16633211004", taxCode: null, pec: null, sdiCode: null, contactName: null, email: null, phone: null, categories: [], notes: null };
     // Il PM di Duit toglie Duit: Fulcro resta collegata anche se non la vede.
     await expect(updateParty(pmDuit, z.id, { ...data, companyIds: [] as string[] })).resolves.toBeUndefined();
     const links = await prisma.partyCompany.findMany({ where: { partyId: z.id } });
