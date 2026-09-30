@@ -85,7 +85,7 @@ export const MODULES: readonly ModuleDefinition[] = [
     permission: "quotes:write",
     summary: "Preventivi con layout e tono della società. Accettato → progetto creato in automatico.",
     step: 8,
-    ready: false,
+    ready: true,
   },
 ];
 

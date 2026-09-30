@@ -45,6 +45,8 @@ async function main() {
       colorDark: "#B066FF",
       logoUrl: "/brands/fulcro-lucem.png",
       logoBg: "#FFFFFF",
+      // TODO: IBAN reale da inserire (via pagina «Impostazioni società», ancora da fare).
+      quoteFooter: "Bonifico bancario · IBAN da completare · Fulcro Lucem S.r.l.",
       sortOrder: 1,
     },
     {
@@ -62,6 +64,11 @@ async function main() {
       colorDark: "#FF6304",
       logoUrl: "/brands/duit.png",
       logoBg: "#FF6301",
+      // I preventivi reali di Duit non usano colore (nero/grigio): il PDF resta neutro,
+      // colorLight/colorDark restano per il resto dell'app (branding, tema).
+      pdfAccent: false,
+      // TODO: IBAN reale da inserire (via pagina «Impostazioni società», ancora da fare).
+      quoteFooter: "Bonifico bancario · IBAN da completare · Duit S.r.l.",
       sortOrder: 2,
     },
     {
@@ -72,6 +79,8 @@ async function main() {
       colorDark: "#3ED7FB",
       logoUrl: "/brands/start-factory.png",
       logoBg: "#090909",
+      // Nessun preventivo reale ancora disponibile: ripiego sullo stile neutro di Duit.
+      pdfAccent: false,
       sortOrder: 3,
     },
   ];
@@ -86,6 +95,12 @@ async function main() {
   const bySlug = new Map(
     (await prisma.company.findMany({ where: { tenantId: tenant.id } })).map((c) => [c.slug, c.id]),
   );
+  // Preventivi di Fulcro: la numerazione riparte dal 30 (roadmap). Mai all'indietro se è già avanti.
+  await prisma.company.updateMany({
+    where: { tenantId: tenant.id, slug: "fulcro-lucem", nextQuoteNumber: { lt: 30 } },
+    data: { nextQuoteNumber: 30 },
+  });
+  // Il listino vero di Fulcro, Duit e St'Art lo inseriscono loro (Preventivi → Listino): qui nessun prezzo inventato.
 
   // Ruoli per società (decisioni del 23 set). Email @ocra.local = accesso di sviluppo;
   // le email vere si aggiungono all'onboarding.
@@ -159,6 +174,49 @@ async function seedDemo() {
       create: { ...c, tenantId: tenant.id },
     });
     ids.set(c.poPrefix, row.id);
+  }
+
+  // Listino demo (prezzi inventati), solo se la società non ne ha ancora uno.
+  const TERMS = "50% alla firma del contratto, saldo a 30 giorni dalla consegna. Prezzi IVA esclusa.";
+  const catalog: Record<string, Array<[name: string, poCode: string, unit: string, price: number, cost: number | null, description?: string]>> = {
+    AS: [
+      ["Brand identity", "BRAND", "forfait", 6500, 2800, "Logo, palette, tipografia e manuale d'uso"],
+      ["Direzione creativa", "BRAND", "giorno", 650, 300],
+      ["Piano editoriale social", "COMUNIC", "mese", 1200, 550, "Calendario, testi e grafiche per 12 post"],
+      ["Servizio fotografico", "COMUNIC", "giorno", 1400, 700],
+      ["Stampa materiali", "BRAND", "forfait", 800, 600, "Coordinamento con la tipografia"],
+    ],
+    AP: [
+      ["Produzione evento", "EVENTI", "giorno", 1800, 900, "Coordinamento, regia e squadra tecnica"],
+      ["Service audio e luci", "EVENTI", "giorno", 2400, 1700],
+      ["Riprese video", "VIDEO", "giorno", 1500, 750, "Due operatori, attrezzatura inclusa"],
+      ["Montaggio video", "VIDEO", "giorno", 600, 280],
+      ["Sopralluogo tecnico", "EVENTI", "forfait", 350, 120],
+    ],
+    AM: [
+      ["Strategia di lancio", "LANCIO", "forfait", 3500, 1400, "Posizionamento, calendario e canali"],
+      ["Videoclip", "VIDEO", "forfait", 9000, 5200],
+      ["Ufficio stampa", "LANCIO", "mese", 1500, 600],
+      ["Campagna social a pagamento", "LANCIO", "mese", 900, 350, "Gestione, budget media escluso"],
+    ],
+  };
+  for (const [prefix, items] of Object.entries(catalog)) {
+    const companyId = ids.get(prefix)!;
+    await prisma.company.update({ where: { id: companyId }, data: { quoteTerms: TERMS } });
+    if (await prisma.serviceItem.count({ where: { companyId } })) continue;
+    await prisma.serviceItem.createMany({
+      data: items.map(([name, poCode, unit, price, cost, description], i) => ({
+        tenantId: tenant.id,
+        companyId,
+        name,
+        poCode,
+        unit,
+        unitPrice: price * 100,
+        unitCost: cost === null ? null : cost * 100,
+        description: description ?? null,
+        sortOrder: i,
+      })),
+    });
   }
 
   const users: Array<{ email: string; name: string; role: Role }> = [

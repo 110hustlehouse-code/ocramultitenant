@@ -3,7 +3,7 @@ import { cn } from "@/lib/cn";
 import { safeHex } from "@/lib/color";
 
 export const inputClass =
-  "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20";
+  "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20 aria-invalid:border-danger";
 
 export const buttonClass = {
   primary:
