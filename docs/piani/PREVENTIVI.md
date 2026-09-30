@@ -1,6 +1,8 @@
 # Piano: Preventivi e creazione automatica del progetto
 
-Stato: **da approvare** (29 set). Nessun codice scritto.
+Stato: **implementato** (30 set). Migrazione, servizio, listino, bozza assistita da Claude, PDF e UI
+(elenco, scheda preventivo, accettazione, budget di sola lettura sul progetto) tutti su `feat/preventivi`.
+`npm run check` verde (lint, typecheck, 145 test).
 Ordine deciso: Preventivi prima del Margine, perché il Margine confronta i costi con il preventivo.
 
 ## Cosa c'è già (verificato nel codice)
@@ -167,15 +169,16 @@ Branch `feat/preventivi`, **dopo l'unione della PR #8** (Solleciti) per evitare 
 3. Claude: proposta delle voci (structured outputs), con test sulla normalizzazione;
 4. PDF; 5. UI: listino, elenco e scheda preventivo, accettazione; budget (sola lettura, CEO) sul progetto.
 
-## Da decidere
+## Decisioni prese (29 set) e come sono finite nel codice
 
-1. **Quando nasce il progetto**: all'«Accettato» (come chiedi), con contratto e acconto come spunte che non
-   bloccano? Il manuale dice accettato → contratto → acconto → progetto: se preferisci, il progetto può nascere
-   all'«Acconto ricevuto».
-2. **Numerazione**: progressiva **per società** e continua negli anni (dal 30 per Fulcro), oppure ripartire da 1
-   ogni anno? Formato mostrato: «Preventivo n. 30/2026».
-3. **`E` / `U` nel codice PO**: la mia lettura è E = entrata (vendita al cliente), U = uscita (acquisto da
-   fornitore). I progetti da preventivo sono sempre `E`?
-4. **Permessi**: solo il CEO (come il modello attuale) o anche il PM prepara le bozze?
-5. **IVA**: una sola aliquota per preventivo (22% di default) va bene, o servono aliquote per voce?
-6. **Invio**: per ora PDF scaricato e «Segna come inviato»; l'invio email con allegato può seguire. Ok?
+1. **Il progetto nasce all'«Accettato»**, non aspetta l'acconto — `acceptQuote()` in `src/server/quotes/service.ts`
+   crea il progetto nella stessa transazione che porta lo stato a `ACCETTATO`. Contratto e acconto restano spunte
+   informative (`setMilestone`), non bloccano nulla.
+2. **Numerazione progressiva per società, continua negli anni** — `Company.nextQuoteNumber`, incrementato in
+   `createQuote()`; il seed riporta Fulcro a 30 (`prisma/seed.ts`). Formato: «Preventivo n. 30/2026» (`quoteLabel`).
+3. **Sempre `E`** — `projectCode()` in `src/lib/quotes.ts` chiude sempre il codice PO con `/E`.
+4. **Solo il CEO** — `quotes:write` e `finance:read` restano permessi esclusivi del CEO in `permissions.ts`; i PM
+   non preparano bozze né vedono i prezzi.
+5. **Aliquota unica per preventivo** — `Quote.vatRate` (default 22%, `DEFAULT_VAT_RATE`), non per voce.
+6. **PDF da scaricare + «Segna come inviato» manuale** — `GET /preventivi/[id]/pdf` (`@react-pdf/renderer`) e
+   `markSent()`; l'invio email diretto resta da fare in un secondo momento.
