@@ -155,7 +155,7 @@ export async function activeBlocksFor(ctx: Pick<AppContext, "db" | "user">) {
     where: { userId: ctx.user.id, releasedAt: null },
     include: {
       blockedBy: { select: { name: true } },
-      task: { select: { id: true, title: true, dueDate: true, priority: true, status: true, project: { select: { name: true } } } },
+      task: { select: { id: true, title: true, dueDate: true, priority: true, status: true, project: { select: { id: true, name: true } } } },
     },
   });
 }

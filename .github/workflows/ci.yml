@@ -23,6 +23,11 @@ jobs:
       DATABASE_URL: postgresql://ocra:ocra@localhost:5432/ocra
       AUTH_SECRET: ci-only-secret-not-used-in-production
       AUTH_TRUST_HOST: "true"
+      # Fittizie: servono solo a firmare URL (nessuna chiamata di rete verso R2 nei test)
+      R2_ACCOUNT_ID: ci-only
+      R2_ACCESS_KEY_ID: ci-only
+      R2_SECRET_ACCESS_KEY: ci-only
+      R2_BUCKET: ci-only
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

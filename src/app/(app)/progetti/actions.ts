@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { ProjectStatus } from "@/generated/prisma/enums";
 import { assertNotBlocked, getContext } from "@/server/context";
+import { closeTaskWithDocument, DocumentError, requestUpload as requestDocumentUpload } from "@/server/documents/service";
 import {
   projectFromFormData,
   projectInputSchema,
@@ -107,4 +108,35 @@ export async function deleteTaskAction(fd: FormData): Promise<void> {
   const ctx = await ctxWithModule();
   await deleteTask(ctx, String(fd.get("taskId")));
   revalidatePath("/progetti", "layout");
+}
+
+/** Chiudere un task allegando un file come prova (modulo Documenti): stesso archivio dei Verbali. */
+export async function requestTaskProofUploadAction(
+  projectId: string,
+  file: { name: string; type: string; size: number },
+): Promise<{ url?: string; key?: string; error?: string }> {
+  const ctx = await ctxWithModule({ allowBlocked: true });
+  if (!ctx.tenant.modules.includes("DOCUMENTI")) return { error: "Modulo Documenti non attivo." };
+  try {
+    return await requestDocumentUpload(ctx, projectId, file);
+  } catch (e) {
+    if (e instanceof DocumentError) return { error: e.message };
+    throw e;
+  }
+}
+
+export async function completeTaskWithFileAction(
+  taskId: string,
+  key: string,
+  file: { name: string; type: string; size: number },
+): Promise<CompleteState> {
+  const ctx = await ctxWithModule({ allowBlocked: true });
+  try {
+    await closeTaskWithDocument(ctx, taskId, key, file);
+  } catch (e) {
+    if (e instanceof ProjectError || e instanceof DocumentError) return { message: e.message };
+    throw e;
+  }
+  revalidatePath("/", "layout");
+  return undefined;
 }

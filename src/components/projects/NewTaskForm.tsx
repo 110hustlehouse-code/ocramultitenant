@@ -33,6 +33,13 @@ export function NewTaskForm({ projectId, people }: { projectId: string; people: 
           <Plus className="size-4" aria-hidden /> Aggiungi
         </button>
       </div>
+      <textarea
+        name="description"
+        rows={2}
+        placeholder="Descrizione (facoltativa)…"
+        aria-label="Descrizione del task"
+        className={inputClass}
+      />
       {(e.title || state?.message) && <p className="text-xs text-danger">{e.title ?? state?.message}</p>}
     </form>
   );
