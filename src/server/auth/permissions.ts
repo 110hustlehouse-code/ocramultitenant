@@ -17,6 +17,7 @@ export const PERMISSIONS = [
   "followups:manage",
   "documents:read",
   "finance:read",
+  "finance:write",
   "quotes:write",
   "company:consolidated",
   "hardblock:manage",

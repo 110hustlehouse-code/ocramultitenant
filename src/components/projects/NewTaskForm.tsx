@@ -6,7 +6,16 @@ import { buttonClass, inputClass } from "@/components/registry/ui";
 import { saveTaskAction, type TaskFormState } from "@/app/(app)/progetti/actions";
 
 /** Aggiunta rapida di un task: titolo, a chi, entro quando. Il resto è facoltativo. */
-export function NewTaskForm({ projectId, people }: { projectId: string; people: { id: string; name: string }[] }) {
+export function NewTaskForm({
+  projectId,
+  people,
+  budgetLines = [],
+}: {
+  projectId: string;
+  people: { id: string; name: string }[];
+  /** Righe di budget del preventivo (solo descrizione, mai importi): per il Margine */
+  budgetLines?: { id: string; description: string }[];
+}) {
   const [state, action, pending] = useActionState<TaskFormState, FormData>(saveTaskAction, undefined);
   const e = state?.errors ?? {};
 
@@ -33,6 +42,16 @@ export function NewTaskForm({ projectId, people }: { projectId: string; people: 
           <Plus className="size-4" aria-hidden /> Aggiungi
         </button>
       </div>
+      {budgetLines.length > 0 && (
+        <select name="budgetLineId" aria-label="Riga di budget" className={inputClass} defaultValue="">
+          <option value="">Nessuna riga di budget (Margine)</option>
+          {budgetLines.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.description}
+            </option>
+          ))}
+        </select>
+      )}
       {(e.title || state?.message) && <p className="text-xs text-danger">{e.title ?? state?.message}</p>}
     </form>
   );
