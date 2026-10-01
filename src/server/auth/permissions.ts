@@ -18,6 +18,7 @@ export const PERMISSIONS = [
   "documents:read",
   "documents:write",
   "finance:read",
+  "finance:write",
   "quotes:write",
   "company:consolidated",
   "hardblock:manage",

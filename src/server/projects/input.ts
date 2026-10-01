@@ -52,6 +52,8 @@ export const taskInputSchema = z.object({
   assigneeId: optionalId,
   dueDate: optionalDay,
   priority: z.enum(["NORMALE", "ALTA", "URGENTE"]).default("NORMALE"),
+  /// Riga di budget del preventivo a cui contribuisce (per il Margine, mai obbligatorio)
+  budgetLineId: optionalId,
 });
 
 export type TaskInput = z.infer<typeof taskInputSchema>;
@@ -87,6 +89,7 @@ export function taskFromFormData(fd: FormData) {
     assigneeId: get("assigneeId"),
     dueDate: get("dueDate"),
     priority: get("priority") || undefined,
+    budgetLineId: get("budgetLineId"),
   };
 }
 
