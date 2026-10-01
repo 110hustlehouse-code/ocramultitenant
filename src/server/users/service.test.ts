@@ -2,7 +2,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient, type Company, type User } from "@/generated/prisma/client";
 import { testContext } from "@/test/context";
-import { listMembers, revokeMember, upsertMember, UserError } from "./service";
+import { listMembers, revokeMember, setUserActive, upsertMember, UserError } from "./service";
 
 const url = process.env.DATABASE_URL;
 describe.skipIf(!url)("gestione utenti", () => {
@@ -111,5 +111,24 @@ describe.skipIf(!url)("gestione utenti", () => {
 
     const bothMembers = await listMembers(asCeoBoth());
     expect(bothMembers.some((m) => m.company.id === fulcro.id)).toBe(true);
+  });
+
+  it("disattivazione: solo chi gestisce la società, effetto sul record subito", async () => {
+    const email = `disattiva-${suffix}@t.local`;
+    await upsertMember(asCeoDuit(), { email, name: "Da Disattivare", role: "CREATIVE", companyId: duit.id, accessExpiresAt: null });
+    const user = await prisma.user.findUniqueOrThrow({ where: { tenantId_email: { tenantId, email } } });
+    expect(user.active).toBe(true);
+
+    await expect(setUserActive(asPm(), user.id, false)).rejects.toThrow(UserError);
+
+    await setUserActive(asCeoDuit(), user.id, false);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).active).toBe(false);
+
+    await setUserActive(asCeoDuit(), user.id, true);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).active).toBe(true);
+  });
+
+  it("non ci si può disattivare da soli", async () => {
+    await expect(setUserActive(asCeoDuit(), ceoDuit.id, false)).rejects.toThrow(UserError);
   });
 });

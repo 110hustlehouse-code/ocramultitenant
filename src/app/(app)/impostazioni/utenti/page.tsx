@@ -5,7 +5,7 @@ import { formatDay } from "@/lib/dates";
 import { ROLE_LABELS } from "@/server/auth/permissions";
 import { getContext } from "@/server/context";
 import { listMembers, manageableCompanies } from "@/server/users/service";
-import { revokeMemberAction } from "../actions";
+import { revokeMemberAction, setUserActiveAction } from "../actions";
 
 export const metadata: Metadata = { title: "Utenti" };
 
@@ -35,12 +35,21 @@ export default async function Page() {
                   {m.role === "EXTERNAL" && m.user.accessExpiresAt && <> · scade il {formatDay(m.user.accessExpiresAt)}</>}
                 </p>
               </div>
-              <form action={revokeMemberAction}>
-                <input type="hidden" name="id" value={m.id} />
-                <button type="submit" className={buttonClass.danger}>
-                  Revoca
-                </button>
-              </form>
+              <div className="flex gap-2">
+                <form action={setUserActiveAction}>
+                  <input type="hidden" name="userId" value={m.userId} />
+                  <input type="hidden" name="active" value={m.user.active ? "false" : "true"} />
+                  <button type="submit" className={buttonClass.secondary}>
+                    {m.user.active ? "Disattiva accesso" : "Riattiva accesso"}
+                  </button>
+                </form>
+                <form action={revokeMemberAction}>
+                  <input type="hidden" name="id" value={m.id} />
+                  <button type="submit" className={buttonClass.danger}>
+                    Revoca
+                  </button>
+                </form>
+              </div>
             </li>
           ))}
         </ul>

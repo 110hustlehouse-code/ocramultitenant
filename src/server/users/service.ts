@@ -83,3 +83,17 @@ export async function revokeMember(ctx: AppContext, membershipId: string): Promi
 
   await ctx.db.membership.delete({ where: { id: membershipId } });
 }
+
+/**
+ * Disattiva o riattiva un account. Effetto immediato: `getContext()` rilegge l'utente dal DB
+ * ad ogni richiesta e nega l'accesso se `active` è falso — nessuna sessione da invalidare a mano.
+ */
+export async function setUserActive(ctx: AppContext, userId: string, active: boolean): Promise<void> {
+  const user = await ctx.db.user.findFirst({ where: { id: userId }, include: { memberships: true } });
+  if (!user) throw new UserError("Utente non trovato.");
+  if (!user.memberships.some((m) => canIn(ctx, m.companyId, "settings:manage"))) {
+    throw new UserError("Non puoi gestire questo utente.");
+  }
+  if (userId === ctx.user.id && !active) throw new UserError("Non puoi disattivare il tuo stesso account.");
+  await ctx.db.user.update({ where: { id: userId }, data: { active } });
+}

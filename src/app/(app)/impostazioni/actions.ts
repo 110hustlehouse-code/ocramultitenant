@@ -7,7 +7,7 @@ import { CompanyError, updateCompanySettings } from "@/server/companies/service"
 import { getContext } from "@/server/context";
 import { fieldErrors } from "@/server/registry/input";
 import { memberFromFormData, memberInputSchema } from "@/server/users/input";
-import { revokeMember, upsertMember, UserError } from "@/server/users/service";
+import { revokeMember, setUserActive, upsertMember, UserError } from "@/server/users/service";
 
 export type MemberFormState =
   | { errors?: Record<string, string>; message?: string; values?: ReturnType<typeof memberFromFormData> }
@@ -33,6 +33,17 @@ export async function revokeMemberAction(fd: FormData): Promise<void> {
   const ctx = await getContext();
   try {
     await revokeMember(ctx, String(fd.get("id") ?? ""));
+  } catch (e) {
+    if (!(e instanceof UserError)) throw e;
+  }
+  revalidatePath("/impostazioni/utenti");
+}
+
+export async function setUserActiveAction(fd: FormData): Promise<void> {
+  const ctx = await getContext();
+  const active = fd.get("active") === "true";
+  try {
+    await setUserActive(ctx, String(fd.get("userId") ?? ""), active);
   } catch (e) {
     if (!(e instanceof UserError)) throw e;
   }
