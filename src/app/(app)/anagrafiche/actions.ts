@@ -27,6 +27,8 @@ export type FormState =
       values?: ReturnType<typeof partyFromFormData>;
       /** L'anagrafica esiste già con un altro ruolo: si propone di aggiungere quello mancante invece di duplicarla. */
       conflict?: { partyId: string; partyName: string; missingKinds: PartyKind[] };
+      /** Solo da /collaboratori: accesso appena creato, password mostrata una tantum (mai persistita in chiaro). */
+      accessCreated?: { partyId: string; email: string; password: string };
     }
   | undefined;
 

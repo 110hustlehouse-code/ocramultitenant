@@ -106,11 +106,12 @@ const adminFields = (d: PartyInput) => ({
   paymentTerms: d.paymentTerms,
 });
 
-function writeFields(ctx: AppContext, d: PartyInput) {
+/** Esportata per riuso da chi crea una Party dentro una propria transazione (es. accessi collaboratori). */
+export function writeFields(ctx: AppContext, d: PartyInput) {
   return { ...generalFields(d), ...(canWriteFinance(ctx, d.companyIds) ? adminFields(d) : {}) };
 }
 
-function assertWritable(ctx: AppContext, companyIds: string[]) {
+export function assertWritable(ctx: AppContext, companyIds: string[]) {
   const allowed = new Set(writableCompanies(ctx).map((c) => c.id));
   if (companyIds.some((id) => !allowed.has(id))) {
     throw new RegistryError("Non puoi assegnare anagrafiche a questa società.");
@@ -122,7 +123,8 @@ function assertWritable(ctx: AppContext, companyIds: string[]) {
  * gruppo a prescindere da quanti ruoli ha. Così un Fornitore con la P.IVA di un Cliente già
  * censito viene riconosciuto, invece di produrre una seconda riga silenziosa.
  */
-async function findDuplicate(ctx: AppContext, d: Pick<PartyInput, "vatNumber" | "taxCode">, excludeId?: string) {
+/** Esportata per riuso da chi deve ripetere lo stesso controllo dentro una propria transazione. */
+export async function findDuplicate(ctx: AppContext, d: Pick<PartyInput, "vatNumber" | "taxCode">, excludeId?: string) {
   const or: Prisma.PartyWhereInput[] = [];
   if (d.vatNumber) or.push({ vatNumber: d.vatNumber });
   if (d.taxCode) or.push({ taxCode: d.taxCode });

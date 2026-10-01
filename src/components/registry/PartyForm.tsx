@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { buttonClass, Field, inputClass } from "@/components/registry/ui";
 import { safeHex } from "@/lib/color";
+import { ROLE_LABELS } from "@/server/auth/permissions";
 import { KIND_LABELS } from "@/server/registry/input";
+import { ROLE_VALUES } from "@/server/users/input";
 import type { FiscalDocumentType, PartyKind } from "@/generated/prisma/enums";
 import type { FormState } from "@/app/(app)/anagrafiche/actions";
 
@@ -48,6 +50,7 @@ export function PartyForm({
   basePath,
   saveAction,
   addRoleAction,
+  accessCompanies,
 }: {
   values: PartyFormValues;
   /** Società tra cui scegliere (quelle dove l'utente può scrivere) */
@@ -63,9 +66,34 @@ export function PartyForm({
   saveAction: (prev: FormState, fd: FormData) => Promise<FormState>;
   /** Server Action per aggiungere un ruolo mancante dalla proposta di conflitto */
   addRoleAction: (fd: FormData) => Promise<void>;
+  /** Solo alla creazione da /collaboratori, se chi guarda gestisce gli utenti (settings:manage):
+   * società tra cui scegliere per il nuovo accesso. Assente altrove — niente sezione "accesso". */
+  accessCompanies?: Company[];
 }) {
   const [state, action, pending] = useActionState<FormState, FormData>(saveAction, undefined);
   const e = state?.errors ?? {};
+
+  if (state?.accessCreated) {
+    return (
+      <div className="max-w-xl space-y-4 rounded-xl border border-border bg-surface p-5">
+        <p className="label">Accesso creato</p>
+        <p className="text-sm">
+          Collaboratore creato con un accesso dedicato. Comunica tu questa password al collaboratore — per sicurezza
+          non verrà più mostrata da nessuna parte.
+        </p>
+        <Field label="Email" name="accessCreatedEmail">
+          <input readOnly value={state.accessCreated.email} className={inputClass} />
+        </Field>
+        <Field label="Password iniziale" name="accessCreatedPassword">
+          <input readOnly value={state.accessCreated.password} className={`${inputClass} font-[family-name:var(--font-mono)]`} />
+        </Field>
+        <Link href={`${basePath}/${state.accessCreated.partyId}`} className={buttonClass.primary}>
+          Vai alla scheda collaboratore
+        </Link>
+      </div>
+    );
+  }
+
   // Dopo un errore si riparte da quanto scritto, non dai valori salvati.
   const current: PartyFormValues = state?.values
     ? {
@@ -185,6 +213,52 @@ export function PartyForm({
           <textarea id="notes" name="notes" rows={3} defaultValue={current.notes ?? ""} className={inputClass} />
         </Field>
       </fieldset>
+
+      {!values.id && accessCompanies && accessCompanies.length > 0 && (
+        <fieldset className="space-y-4 rounded-xl border border-border bg-surface p-5">
+          <legend className="label px-1">Accesso</legend>
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input type="checkbox" name="createAccess" value="true" defaultChecked />
+            Crea anche l&apos;accesso: un vero account di login dedicato, non un collegamento a uno esistente
+          </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Email di accesso" name="accessEmail" error={e.accessEmail}>
+              <input id="accessEmail" name="accessEmail" type="email" className={inputClass} />
+            </Field>
+            <Field label="Password iniziale" name="accessPassword" error={e.accessPassword} hint="Almeno 10 caratteri — la comunichi tu dopo il salvataggio">
+              <input id="accessPassword" name="accessPassword" type="text" className={inputClass} />
+            </Field>
+            <Field label="Ruolo" name="accessRole" error={e.accessRole}>
+              <select id="accessRole" name="accessRole" defaultValue="CREATIVE" className={inputClass}>
+                {ROLE_VALUES.map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABELS[r]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Scadenza accesso" name="accessExpiresAt" error={e.accessExpiresAt} hint="Richiesta solo per il ruolo Esterno">
+              <input id="accessExpiresAt" name="accessExpiresAt" type="date" className={inputClass} />
+            </Field>
+          </div>
+          <div className="space-y-2">
+            <p className="label">Società con accesso</p>
+            <div className="flex flex-wrap gap-2">
+              {accessCompanies.map((c) => (
+                <label
+                  key={c.id}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm has-checked:border-text"
+                >
+                  <input type="checkbox" name="accessCompanyIds" value={c.id} defaultChecked={current.companyIds.includes(c.id)} />
+                  <span className="size-2 rounded-full" style={{ background: safeHex(c.colorLight, "#11151c") }} aria-hidden />
+                  {c.name}
+                </label>
+              ))}
+            </div>
+            {e.accessCompanyIds && <p className="text-xs text-danger">{e.accessCompanyIds}</p>}
+          </div>
+        </fieldset>
+      )}
 
       {canWriteFinance && (
         <fieldset className="grid gap-4 rounded-xl border border-border bg-surface p-5 sm:grid-cols-2">

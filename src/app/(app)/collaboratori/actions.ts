@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PartyKind } from "@/generated/prisma/enums";
-import { addEvaluation, CollaboratorError, evaluationInputSchema, setLinkedUser } from "@/server/collaborators/service";
+import { collaboratorAccessFromFormData, collaboratorAccessInputSchema } from "@/server/collaborators/input";
+import { addEvaluation, CollaboratorError, createCollaboratorWithAccess, evaluationInputSchema, setLinkedUser } from "@/server/collaborators/service";
 import { assertNotBlocked, getContext } from "@/server/context";
 import { collaboratorKindFromParam, fieldErrors, PARAM_BY_KIND, partyFromFormData, partyInputSchema } from "@/server/registry/input";
 import {
@@ -23,6 +24,8 @@ export type FormState =
       message?: string;
       values?: ReturnType<typeof partyFromFormData>;
       conflict?: { partyId: string; partyName: string; missingKinds: PartyKind[] };
+      /** Accesso appena creato: password mostrata una tantum, mai persistita in chiaro. */
+      accessCreated?: { partyId: string; email: string; password: string };
     }
   | undefined;
 
@@ -49,6 +52,27 @@ export async function savePartyAction(_prev: FormState, fd: FormData): Promise<F
 
   const parsed = partyInputSchema.safeParse(values);
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values };
+
+  // "Crea anche l'accesso": solo alla creazione, mai alla modifica (il collaboratore esistente
+  // si collega a un account con la rubrica `setLinkedUser`, non se ne crea un secondo).
+  const createAccess = !id && fd.get("createAccess") === "true";
+  if (createAccess) {
+    const accessValues = collaboratorAccessFromFormData(fd);
+    const parsedAccess = collaboratorAccessInputSchema.safeParse(accessValues);
+    if (!parsedAccess.success) return { errors: fieldErrors(parsedAccess.error), values };
+
+    try {
+      const created = await createCollaboratorWithAccess(ctx, parsed.data, parsedAccess.data);
+      revalidatePath("/collaboratori");
+      return { accessCreated: { partyId: created.partyId, email: parsedAccess.data.email, password: parsedAccess.data.password } };
+    } catch (e) {
+      if (e instanceof PartyConflictError) {
+        return { message: e.message, values, conflict: { partyId: e.partyId, partyName: e.partyName, missingKinds: e.missingKinds } };
+      }
+      if (e instanceof RegistryError || e instanceof CollaboratorError) return { message: e.message, values };
+      throw e;
+    }
+  }
 
   try {
     if (id) await updateParty(ctx, id, parsed.data);

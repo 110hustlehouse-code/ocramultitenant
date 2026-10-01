@@ -4,6 +4,7 @@ import { PartyForm } from "@/components/registry/PartyForm";
 import { requireModule } from "@/server/context";
 import { collaboratorKindFromParam, PARAM_BY_KIND } from "@/server/registry/input";
 import { canWriteFinance, viewCompanies, writableCompanies } from "@/server/registry/service";
+import { manageableCompanies } from "@/server/users/service";
 import { addPartyKindsAction, savePartyAction } from "../actions";
 
 export const metadata: Metadata = { title: "Nuovo collaboratore" };
@@ -34,6 +35,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
         saveAction={savePartyAction}
         addRoleAction={addPartyKindsAction}
         cancelHref={`/collaboratori?tipo=${PARAM_BY_KIND[kind]}`}
+        accessCompanies={manageableCompanies(ctx).map(({ id, name, colorLight }) => ({ id, name, colorLight }))}
         values={{
           kinds: [kind],
           name: "",

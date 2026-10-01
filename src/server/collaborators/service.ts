@@ -1,8 +1,11 @@
 import "server-only";
 import { z } from "zod";
+import { hashPassword } from "@/server/auth/password";
+import type { CollaboratorAccessInput } from "@/server/collaborators/input";
 import type { AppContext } from "@/server/context";
+import type { PartyInput } from "@/server/registry/input";
 import { canIn } from "@/server/projects/service";
-import { getParty } from "@/server/registry/service";
+import { assertWritable, findDuplicate, getParty, PartyConflictError, RegistryError, writeFields } from "@/server/registry/service";
 
 export class CollaboratorError extends Error {}
 
@@ -123,4 +126,57 @@ export async function setLinkedUser(ctx: AppContext, partyId: string, userId: st
     if (!ok) throw new CollaboratorError("Utente non trovato.");
   }
   await ctx.db.party.update({ where: { id: partyId }, data: { linkedUserId: userId } });
+}
+
+/**
+ * Crea un collaboratore CON un vero accesso dedicato, in un'unica operazione atomica:
+ * Party + User + Membership (una per società scelta) + collegamento Party → User. Mai un
+ * collegamento a un utente che esiste già — qui l'account nasce con il collaboratore.
+ * `access.password` è già validata (lunghezza minima) dallo schema del form; qui si fa solo hash.
+ */
+export async function createCollaboratorWithAccess(
+  ctx: AppContext,
+  party: PartyInput,
+  access: CollaboratorAccessInput,
+): Promise<{ partyId: string; userId: string }> {
+  assertWritable(ctx, party.companyIds);
+  if (access.companyIds.some((id) => !canIn(ctx, id, "settings:manage"))) {
+    throw new CollaboratorError("Non puoi creare un accesso per questa società.");
+  }
+  if (access.role === "EXTERNAL" && !access.accessExpiresAt) {
+    throw new CollaboratorError("Il ruolo Esterno richiede una data di scadenza dell'accesso.");
+  }
+
+  const dup = await findDuplicate(ctx, party);
+  if (dup) {
+    const missingKinds = party.kinds.filter((k) => !dup.kinds.includes(k));
+    if (missingKinds.length === 0) throw new RegistryError(`Esiste già: ${dup.name}. Aprila e aggiungi la società da lì.`);
+    throw new PartyConflictError(dup.id, dup.name, missingKinds);
+  }
+  const emailTaken = await ctx.db.user.findUnique({ where: { tenantId_email: { tenantId: ctx.tenant.id, email: access.email } } });
+  if (emailTaken) throw new CollaboratorError(`Email già in uso da ${emailTaken.name}.`);
+
+  const passwordHash = await hashPassword(access.password);
+
+  return ctx.db.$transaction(async (tx) => {
+    const createdParty = await tx.party.create({ data: { kinds: party.kinds, ...writeFields(ctx, party), tenantId: ctx.tenant.id } });
+    await tx.partyCompany.createMany({
+      data: party.companyIds.map((companyId) => ({ tenantId: ctx.tenant.id, partyId: createdParty.id, companyId })),
+    });
+    const user = await tx.user.create({
+      data: {
+        tenantId: ctx.tenant.id,
+        email: access.email,
+        name: party.name,
+        passwordHash,
+        mustChangePassword: true,
+        accessExpiresAt: access.role === "EXTERNAL" ? access.accessExpiresAt : null,
+      },
+    });
+    await tx.membership.createMany({
+      data: access.companyIds.map((companyId) => ({ tenantId: ctx.tenant.id, userId: user.id, companyId, role: access.role })),
+    });
+    await tx.party.update({ where: { id: createdParty.id }, data: { linkedUserId: user.id } });
+    return { partyId: createdParty.id, userId: user.id };
+  });
 }

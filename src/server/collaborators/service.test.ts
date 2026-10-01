@@ -1,8 +1,10 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient, type Company, type User } from "@/generated/prisma/client";
+import type { PartyKind } from "@/generated/prisma/enums";
 import { testContext } from "@/test/context";
-import { addEvaluation, CollaboratorError, collaboratorProjects, listEvaluations, setLinkedUser } from "./service";
+import { PartyConflictError } from "@/server/registry/service";
+import { addEvaluation, CollaboratorError, collaboratorProjects, createCollaboratorWithAccess, listEvaluations, setLinkedUser } from "./service";
 
 const url = process.env.DATABASE_URL;
 describe.skipIf(!url)("collaboratori sul database", () => {
@@ -102,5 +104,109 @@ describe.skipIf(!url)("collaboratori sul database", () => {
     await expect(
       addEvaluation(asCeoBoth(), collaboratorId, { companyId: fulcro.id, projectId: null, rating: 3, notes: null }),
     ).rejects.toThrow(/non valida/);
+  });
+
+  describe("accesso dedicato alla creazione", () => {
+    const partyBase = (overrides: Partial<Parameters<typeof createCollaboratorWithAccess>[1]> = {}) => ({
+      kinds: ["COLLABORATORE_ESTERNO"] as PartyKind[],
+      name: "Nuovo Collaboratore",
+      address: null,
+      vatNumber: null,
+      taxCode: null,
+      pec: null,
+      sdiCode: null,
+      contactName: null,
+      email: null,
+      phone: null,
+      categories: [],
+      notes: null,
+      companyIds: [duit.id],
+      availabilityNote: null,
+      paymentIban: null,
+      paymentHolder: null,
+      fiscalDocumentType: null,
+      paymentTerms: null,
+      ...overrides,
+    });
+
+    it("crea Party + User + Membership in un colpo solo, con la password hashata e il cambio obbligatorio", async () => {
+      const email = `collab-${suffix}@t.local`;
+      const result = await createCollaboratorWithAccess(asCeo(), partyBase({ name: "Luca Esterno" }), {
+        email,
+        password: "una-password-robusta",
+        role: "CREATIVE",
+        companyIds: [duit.id],
+        accessExpiresAt: null,
+      });
+
+      const user = await prisma.user.findUniqueOrThrow({ where: { id: result.userId } });
+      expect(user.email).toBe(email);
+      expect(user.passwordHash).not.toBeNull();
+      expect(user.passwordHash).not.toBe("una-password-robusta");
+      expect(user.mustChangePassword).toBe(true);
+
+      const membership = await prisma.membership.findUniqueOrThrow({ where: { userId_companyId: { userId: user.id, companyId: duit.id } } });
+      expect(membership.role).toBe("CREATIVE");
+
+      const party = await prisma.party.findUniqueOrThrow({ where: { id: result.partyId } });
+      expect(party.linkedUserId).toBe(user.id);
+    });
+
+    it("un PM senza settings:manage non può creare un accesso, anche se gestisce i collaboratori", async () => {
+      await expect(
+        createCollaboratorWithAccess(asPm(), partyBase({ name: "Tentativo PM" }), {
+          email: `pmtry-${suffix}@t.local`,
+          password: "una-password-robusta",
+          role: "CREATIVE",
+          companyIds: [duit.id],
+          accessExpiresAt: null,
+        }),
+      ).rejects.toThrow(CollaboratorError);
+    });
+
+    it("ruolo Esterno senza scadenza: rifiutato anche chiamando il servizio direttamente", async () => {
+      await expect(
+        createCollaboratorWithAccess(asCeo(), partyBase({ name: "Esterno Senza Scadenza" }), {
+          email: `extnodate-${suffix}@t.local`,
+          password: "una-password-robusta",
+          role: "EXTERNAL",
+          companyIds: [duit.id],
+          accessExpiresAt: null,
+        }),
+      ).rejects.toThrow(/scadenza/);
+    });
+
+    it("email già in uso nel tenant: rifiutata prima di creare nulla", async () => {
+      await expect(
+        createCollaboratorWithAccess(asCeo(), partyBase({ name: "Email Duplicata" }), {
+          email: ceo.email,
+          password: "una-password-robusta",
+          role: "CREATIVE",
+          companyIds: [duit.id],
+          accessExpiresAt: null,
+        }),
+      ).rejects.toThrow(/Email già in uso/);
+    });
+
+    it("P.IVA già di un'altra anagrafica con ruolo diverso: propone il conflitto, non crea un secondo account", async () => {
+      await prisma.party.create({
+        data: { tenantId, kinds: ["CLIENTE"], name: "Già Censito", vatNumber: "18051641001" },
+      });
+
+      await expect(
+        createCollaboratorWithAccess(
+          asCeo(),
+          partyBase({ name: "Già Censito Bis", vatNumber: "18051641001", kinds: ["FORNITORE"] }),
+          {
+            email: `giacensito-${suffix}@t.local`,
+            password: "una-password-robusta",
+            role: "CREATIVE",
+            companyIds: [duit.id],
+            accessExpiresAt: null,
+          },
+        ),
+      ).rejects.toThrow(PartyConflictError);
+      expect(await prisma.user.count({ where: { email: `giacensito-${suffix}@t.local` } })).toBe(0);
+    });
   });
 });
