@@ -10,6 +10,7 @@ import { requireModule } from "@/server/context";
 import { formatDayInput, isOverdue, STATUS_LABELS } from "@/server/projects/input";
 import { formatEuro } from "@/lib/quotes";
 import { activeFollowUpsFor, canStartFollowUp } from "@/server/followups/service";
+import { budgetLineLabels } from "@/server/margine/service";
 import { projectBudget } from "@/server/quotes/service";
 import { assignableUsers, getProject } from "@/server/projects/service";
 import { setProjectStatusAction } from "../actions";
@@ -25,9 +26,10 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const done = project.tasks.filter((t) => t.status === "FATTO");
   const overdue = open.filter((t) => isOverdue(t)).length;
   const c = project.company;
-  const [followUps, budget] = await Promise.all([
+  const [followUps, budget, budgetLines] = await Promise.all([
     activeFollowUpsFor(ctx, open.map((t) => t.id)),
     projectBudget(ctx, project.id, project.companyId),
+    budgetLineLabels(ctx, project.id, project.companyId),
   ]);
   const client = project.client;
   const followUpStart = (t: (typeof project.tasks)[number]) =>
@@ -179,8 +181,12 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           </div>
           {budget.hasCosts && (
             <p className="text-sm text-muted">
-              Margine previsto: <span className="num font-semibold text-text">{formatEuro(budget.revenue - budget.plannedCost)}</span>. I
-              costi reali contro questo budget arrivano con il modulo Margine.
+              Margine previsto: <span className="num font-semibold text-text">{formatEuro(budget.revenue - budget.plannedCost)}</span>.{" "}
+              {ctx.tenant.modules.includes("MARGINE") ? (
+                <a href={`/margine/${project.id}`} className="underline">Vedi il margine reale, in continuo</a>
+              ) : (
+                "I costi reali contro questo budget arrivano con il modulo Margine."
+              )}
             </p>
           )}
         </section>
@@ -211,7 +217,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
               {done.map(row)}
             </ul>
           )}
-          {project.canManage && <NewTaskForm projectId={project.id} people={people} />}
+          {project.canManage && <NewTaskForm projectId={project.id} people={people} budgetLines={budgetLines} />}
         </div>
       </section>
 

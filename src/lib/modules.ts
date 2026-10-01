@@ -74,9 +74,9 @@ export const MODULES: readonly ModuleDefinition[] = [
     label: "Margine",
     href: "/margine",
     permission: "finance:read",
-    summary: "Ore e costi contro preventivo, in continuo. Allerta mentre il progetto è recuperabile.",
+    summary: "Ricavo previsto, costi reali e margine per progetto, società e gruppo, in soldi e in task. Allerta mentre il progetto è recuperabile.",
     step: 7,
-    ready: false,
+    ready: true,
   },
   {
     key: "PREVENTIVI",

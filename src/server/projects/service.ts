@@ -117,6 +117,12 @@ async function assertClient(ctx: AppContext, companyId: string, clientId: string
   if (!ok) throw new ProjectError("Cliente non valido per questa società.");
 }
 
+async function assertBudgetLine(ctx: AppContext, projectId: string, budgetLineId: string | null) {
+  if (!budgetLineId) return;
+  const ok = await ctx.db.projectBudgetLine.count({ where: { id: budgetLineId, projectId } });
+  if (!ok) throw new ProjectError("Riga di budget non valida per questo progetto.");
+}
+
 async function assertCodeFree(ctx: AppContext, code: string | null, exceptId?: string) {
   if (!code) return;
   const dup = await ctx.db.project.findFirst({
@@ -206,6 +212,7 @@ async function ensureMember(ctx: AppContext, projectId: string, userId: string |
 export async function createTask(ctx: AppContext, projectId: string, d: TaskInput) {
   const project = await manageable(ctx, projectId);
   if (d.assigneeId) await assertUsersInCompany(ctx, project.companyId, [d.assigneeId]);
+  await assertBudgetLine(ctx, projectId, d.budgetLineId);
   const task = await ctx.db.task.create({
     data: { ...d, projectId, source: "MANUALE", tenantId: ctx.tenant.id },
   });
@@ -229,6 +236,7 @@ export async function updateTask(ctx: AppContext, taskId: string, d: TaskInput) 
   const { task, manager } = await loadTask(ctx, taskId);
   if (!manager) throw new ProjectError("Solo CEO e PM modificano i task.");
   if (d.assigneeId) await assertUsersInCompany(ctx, task.project.companyId, [d.assigneeId]);
+  await assertBudgetLine(ctx, task.projectId, d.budgetLineId);
   // Nuova scadenza o nuova persona: i richiami ripartono da zero (decisione del CEO/PM).
   const changed =
     d.assigneeId !== task.assigneeId || (d.dueDate?.getTime() ?? null) !== (task.dueDate?.getTime() ?? null);
