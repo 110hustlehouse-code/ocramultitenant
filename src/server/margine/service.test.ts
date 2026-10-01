@@ -2,6 +2,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient, type Company, type User } from "@/generated/prisma/client";
 import { ALL_COMPANIES } from "@/server/company/selection";
+import { projectBudget } from "@/server/quotes/service";
 import { testContext } from "@/test/context";
 import { addCost, budgetLineLabels, deleteCost, MarginError, marginBoard, projectMargin } from "./service";
 
@@ -11,7 +12,7 @@ describe.skipIf(!url)("margine sul database", () => {
   const suffix = Date.now().toString(36);
   let tenantId: string;
   let duit: Company, fulcro: Company;
-  let ceo: User, pm: User;
+  let ceo: User, pm: User, ceoFulcro: User;
   let projectId: string, lineA: string, lineB: string;
 
   const ctxFor = (u: User, roles: Array<[Company, "CEO" | "PROJECT_MANAGER"]>, view?: string) => {
@@ -22,6 +23,8 @@ describe.skipIf(!url)("margine sul database", () => {
   // consolidata si sceglie nel selettore società, come per ogni altro modulo — non è un caso speciale qui).
   const asCeo = () => ctxFor(ceo, [[duit, "CEO"], [fulcro, "CEO"]], ALL_COMPANIES);
   const asPm = () => ctxFor(pm, [[duit, "PROJECT_MANAGER"]]);
+  // CEO SOLO di Fulcro: ha finance:read/projects:write là, mai su Duit.
+  const asCeoFulcro = () => ctxFor(ceoFulcro, [[fulcro, "CEO"]]);
 
   beforeAll(async () => {
     tenantId = (await prisma.tenant.create({ data: { slug: `mar-${suffix}`, name: "Mar", modules: ["PROGETTI", "MARGINE"] } })).id;
@@ -34,6 +37,7 @@ describe.skipIf(!url)("margine sul database", () => {
     };
     ceo = await user("Daniele", "CEO", [duit, fulcro]);
     pm = await user("Giammarco", "PROJECT_MANAGER", [duit]);
+    ceoFulcro = await user("Erika", "CEO", [fulcro]);
 
     projectId = (await prisma.project.create({ data: { tenantId, companyId: duit.id, name: "Videoclip", managerId: pm.id } })).id;
     lineA = (await prisma.projectBudgetLine.create({ data: { tenantId, projectId, description: "Riprese", revenue: 100_000, plannedCost: 40_000 } })).id;
@@ -60,6 +64,17 @@ describe.skipIf(!url)("margine sul database", () => {
   it("il PM può vedere le etichette delle righe di budget (senza importi) per collegare i task", async () => {
     const labels = await budgetLineLabels(asPm(), projectId, duit.id);
     expect(labels).toEqual([{ id: lineA, description: "Riprese" }, { id: lineB, description: "Montaggio" }]);
+  });
+
+  it("budgetLineLabels non trapela le righe di un progetto di un'altra società, anche passando un companyId dove si è autorizzati", async () => {
+    // projectId è di Duit, companyId è Fulcro (dove ceoFulcro è davvero CEO): i due non corrispondono.
+    const labels = await budgetLineLabels(asCeoFulcro(), projectId, fulcro.id);
+    expect(labels).toEqual([]);
+  });
+
+  it("projectBudget non trapela ricavi/costi di un progetto di un'altra società, anche passando un companyId dove si è autorizzati", async () => {
+    const budget = await projectBudget(asCeoFulcro(), projectId, fulcro.id);
+    expect(budget).toBeNull();
   });
 
   it("costo interno stimato dai task chiusi, non dalle ore; costi manuali sommati", async () => {

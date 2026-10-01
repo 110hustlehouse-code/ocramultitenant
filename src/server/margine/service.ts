@@ -12,9 +12,13 @@ export class MarginError extends Error {}
 /**
  * Etichette delle righe di budget (senza importi): per collegare un task a una riga quando lo si
  * modifica, anche se chi lo fa (il PM) non ha `finance:read` e non vede prezzi o costi.
+ * `companyId` si verifica contro quello vero del progetto: non ci si fida del parametro,
+ * altrimenti un `projectId` di un'altra società con un `companyId` dove si ha `projects:write`
+ * farebbe trapelare le righe di budget della società sbagliata.
  */
 export async function budgetLineLabels(ctx: AppContext, projectId: string, companyId: string) {
-  if (!canIn(ctx, companyId, "projects:write")) return [];
+  const project = await ctx.db.project.findFirst({ where: { id: projectId }, select: { companyId: true } });
+  if (!project || project.companyId !== companyId || !canIn(ctx, project.companyId, "projects:write")) return [];
   return ctx.db.projectBudgetLine.findMany({
     where: { projectId },
     select: { id: true, description: true },

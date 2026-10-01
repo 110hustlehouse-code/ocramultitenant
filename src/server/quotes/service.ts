@@ -364,9 +364,15 @@ export async function deleteDraft(ctx: AppContext, id: string) {
   await ctx.db.quote.delete({ where: { id } });
 }
 
-/** Budget del progetto (solo chi vede i dati economici). */
+/**
+ * Budget del progetto (solo chi vede i dati economici).
+ * `companyId` si verifica contro quello vero del progetto: non ci si fida del parametro,
+ * altrimenti un `projectId` di un'altra società con un `companyId` dove si ha `finance:read`
+ * farebbe trapelare budget e costi della società sbagliata.
+ */
 export async function projectBudget(ctx: AppContext, projectId: string, companyId: string) {
-  if (!canIn(ctx, companyId, "finance:read")) return null;
+  const project = await ctx.db.project.findFirst({ where: { id: projectId }, select: { companyId: true } });
+  if (!project || project.companyId !== companyId || !canIn(ctx, project.companyId, "finance:read")) return null;
   const [lines, quote] = await Promise.all([
     ctx.db.projectBudgetLine.findMany({ where: { projectId }, orderBy: { sortOrder: "asc" } }),
     ctx.db.quote.findFirst({ where: { projectId }, select: { id: true, number: true, contractSignedAt: true, depositReceivedAt: true } }),
