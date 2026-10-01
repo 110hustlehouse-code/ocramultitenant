@@ -60,9 +60,16 @@ export function isGoogleEnabled(): boolean {
   return Boolean(e.AUTH_GOOGLE_ID && e.AUTH_GOOGLE_SECRET);
 }
 
-/** L'accesso di sviluppo non è mai attivo in produzione. */
+/**
+ * L'accesso di sviluppo non è mai attivo in produzione — doppio controllo, non solo
+ * NODE_ENV: Vercel imposta `VERCEL=1` su ogni deployment (produzione E preview). Così,
+ * anche se `AUTH_DEV_LOGIN=true` finisse per errore tra le variabili d'ambiente di Vercel
+ * (dove NODE_ENV potrebbe non essere affidabile quanto ci si aspetta), il login resta
+ * chiuso: si attiva solo in locale/Codespaces, mai su un host Vercel.
+ */
 export function isDevLoginEnabled(): boolean {
   const e = env();
+  if (process.env.VERCEL) return false;
   return e.NODE_ENV !== "production" && e.AUTH_DEV_LOGIN === "true";
 }
 

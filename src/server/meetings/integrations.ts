@@ -17,10 +17,16 @@ function manageable(ctx: AppContext): string[] {
   return ctx.access.filter((a) => canIn(ctx, a.company.id, "settings:manage")).map((a) => a.company.id);
 }
 
+/** Mai `tokenHash` qui: è l'unico segreto del modello, non serve a nessuna UI. */
 export async function listIntegrations(ctx: AppContext) {
   return ctx.db.meetingIntegration.findMany({
     where: { companyId: { in: manageable(ctx) } },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      active: true,
+      tokenHint: true,
+      lastUsedAt: true,
       company: { select: { id: true, name: true } },
       project: { select: { id: true, name: true } },
       _count: { select: { meetings: true } },

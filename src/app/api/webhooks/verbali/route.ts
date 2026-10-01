@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { authenticateIntegration, ingestMeeting } from "@/server/meetings/integrations";
 import { bearerToken, MAX_BODY_BYTES, parseInbound } from "@/server/meetings/inbound";
 import { runProcessing } from "@/server/meetings/service";
+import { rateLimitRequest } from "@/server/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 /** Verbale e task girano dopo la risposta (after), fino a 5 minuti. */
@@ -16,6 +17,9 @@ const json = (status: number, body: Record<string, unknown>) => Response.json(bo
  * Risponde 202 e continua in background con lo stesso flusso degli altri ingressi.
  */
 export async function POST(request: Request) {
+  if (rateLimitRequest(request, "webhooks-verbali", 30, 60_000)) {
+    return json(429, { error: "Troppe richieste, riprova tra poco." });
+  }
   const token = bearerToken(request.headers.get("authorization"));
   const integration = token ? await authenticateIntegration(token) : null;
   if (!integration) return json(401, { error: "Token non valido o collegamento disattivato." });

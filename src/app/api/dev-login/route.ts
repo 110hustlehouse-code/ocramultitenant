@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { signIn } from "@/auth";
 import { isDevLoginEnabled } from "@/env";
+import { rateLimitRequest } from "@/server/security/rate-limit";
 
 function safeCallback(value: FormDataEntryValue | null): string {
     const url = typeof value === "string" ? value : "/";
@@ -17,6 +18,9 @@ function publicOrigin(req: NextRequest): string {
 export async function POST(req: NextRequest) {
     if (!isDevLoginEnabled()) {
         return NextResponse.json({ error: "Accesso sviluppo non attivo" }, { status: 403 });
+    }
+    if (rateLimitRequest(req, "dev-login", 10, 5 * 60_000)) {
+        return NextResponse.json({ error: "Troppi tentativi, riprova tra qualche minuto." }, { status: 429 });
     }
 
     const formData = await req.formData();
