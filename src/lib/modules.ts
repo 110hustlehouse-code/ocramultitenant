@@ -87,6 +87,15 @@ export const MODULES: readonly ModuleDefinition[] = [
     step: 8,
     ready: true,
   },
+  {
+    key: "COLLABORATORI",
+    label: "Collaboratori",
+    href: "/collaboratori",
+    permission: "collaborators:read",
+    summary: "Rubrica di collaboratori interni, esterni e fornitori: disponibilità, progetti, dati di pagamento e valutazioni.",
+    step: 9,
+    ready: true,
+  },
 ];
 
 export function getModule(key: ModuleKey): ModuleDefinition {

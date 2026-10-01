@@ -7,6 +7,8 @@ import type { Role } from "@/generated/prisma/enums";
 export const PERMISSIONS = [
   "registry:read",
   "registry:write",
+  "collaborators:read",
+  "collaborators:write",
   "projects:read",
   "projects:write",
   "tasks:read:all",
@@ -32,6 +34,8 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   PROJECT_MANAGER: [
     "registry:read",
     "registry:write",
+    "collaborators:read",
+    "collaborators:write",
     "projects:read",
     "projects:write",
     "tasks:read:all",

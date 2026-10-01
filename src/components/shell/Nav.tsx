@@ -10,6 +10,7 @@ import {
   BellRing,
   Hourglass,
   TrendingUp,
+  UserCog,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -27,6 +28,7 @@ const ICONS: Record<ModuleKey | "HOME", LucideIcon> = {
   DOCUMENTI: FileText,
   MARGINE: TrendingUp,
   PREVENTIVI: Receipt,
+  COLLABORATORI: UserCog,
 };
 
 export type NavItem = { key: ModuleKey | "HOME"; label: string; href: string };
