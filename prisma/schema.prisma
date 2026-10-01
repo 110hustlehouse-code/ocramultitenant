@@ -63,6 +63,7 @@ model Tenant {
   quotes              Quote[]
   quoteLines          QuoteLine[]
   projectBudgetLines  ProjectBudgetLine[]
+  projectCosts        ProjectCost[]
   reminders           Reminder[]
   accountBlocks       AccountBlock[]
   documents           Document[]
@@ -145,6 +146,7 @@ model User {
   followUpsResolved   ClientFollowUp[]     @relation("FollowUpResolvedBy")
   clientMessagesSent  ClientMessage[]
   quotesCreated       Quote[]
+  projectCostsCreated ProjectCost[]
   reminders           Reminder[]           @relation("ReminderRecipient")
   blocks              AccountBlock[]       @relation("BlockedUser")
   blocksIssued        AccountBlock[]       @relation("BlockedBy")
@@ -293,6 +295,7 @@ model Project {
   documents           Document[]
   quote               Quote?
   budgetLines         ProjectBudgetLine[]
+  costs               ProjectCost[]
 
   @@unique([tenantId, code])
   @@index([tenantId, companyId, status])
@@ -330,6 +333,8 @@ model Task {
   proof          String?
   /// Verbale da cui è stato estratto (source = VERBALE)
   meetingId      String?
+  /// Riga di budget a cui contribuisce: il Margine stima il lavoro interno da qui, non dalle ore
+  budgetLineId   String?
   /// Richiamo: 0 nessuno · 1 primo (mattina) · 2 secondo (pomeriggio) · 3 al PM · 4 al CEO
   escalation     Int          @default(0)
   lastReminderAt DateTime?
@@ -341,11 +346,12 @@ model Task {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignee    User?            @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  completedBy User?            @relation("TaskCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
-  meeting     Meeting?         @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee    User?              @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  completedBy User?              @relation("TaskCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+  meeting     Meeting?           @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  budgetLine  ProjectBudgetLine? @relation(fields: [budgetLineId], references: [id], onDelete: SetNull)
   reminders   Reminder[]
   blocks      AccountBlock[]
   followUps   ClientFollowUp[]
@@ -354,6 +360,7 @@ model Task {
   @@index([tenantId, projectId])
   @@index([meetingId])
   @@index([tenantId, assigneeId, status])
+  @@index([budgetLineId])
 }
 
 enum DocumentStatus {
@@ -769,6 +776,32 @@ model ProjectBudgetLine {
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   quoteLine   QuoteLine?   @relation(fields: [quoteLineId], references: [id], onDelete: SetNull)
   serviceItem ServiceItem? @relation(fields: [serviceItemId], references: [id], onDelete: SetNull)
+  tasks       Task[]
+  costs       ProjectCost[]
 
   @@index([projectId])
+}
+
+/// Costo reale, registrato a mano (fattura, collaboratore esterno, acquisto): il Margine lo
+/// confronta con `ProjectBudgetLine.plannedCost`. Niente ore: «in soldi e in task» (priorità di Daniele).
+model ProjectCost {
+  id           String   @id @default(cuid())
+  tenantId     String
+  projectId    String
+  /// Riga di budget a cui imputarlo (facoltativo: una spesa può non mappare una voce precisa)
+  budgetLineId String?
+  description  String
+  /// Centesimi
+  amount       Int
+  incurredAt   DateTime
+  createdById  String?
+  createdAt    DateTime @default(now())
+
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project    Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  budgetLine ProjectBudgetLine? @relation(fields: [budgetLineId], references: [id], onDelete: SetNull)
+  createdBy  User?              @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, projectId])
+  @@index([budgetLineId])
 }
