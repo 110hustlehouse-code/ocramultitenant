@@ -17,7 +17,7 @@ export default async function Page() {
   const [quotes, clients] = await Promise.all([
     listQuotes(ctx),
     ctx.db.party.findMany({
-      where: { kind: "CLIENTE", active: true, companies: { some: { companyId: { in: companies.map((c) => c.id) } } } },
+      where: { kinds: { has: "CLIENTE" }, active: true, companies: { some: { companyId: { in: companies.map((c) => c.id) } } } },
       select: { id: true, name: true, companies: { select: { companyId: true } } },
       orderBy: { name: "asc" },
     }),

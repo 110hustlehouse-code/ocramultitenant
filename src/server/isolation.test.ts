@@ -67,7 +67,7 @@ describe.skipIf(!url)("isolamento cross-tenant sul database", () => {
     const membership = await prisma.membership.create({ data: { tenantId: tenantB, userId: victimCeo.id, companyId: companyB.id, role: "CEO" } });
     victimMembershipId = membership.id;
 
-    const party = await prisma.party.create({ data: { tenantId: tenantB, kind: "CLIENTE", name: "Cliente riservato" } });
+    const party = await prisma.party.create({ data: { tenantId: tenantB, kinds: ["CLIENTE"], name: "Cliente riservato" } });
     await prisma.partyCompany.create({ data: { tenantId: tenantB, partyId: party.id, companyId: companyB.id } });
     victimPartyId = party.id;
 
@@ -119,7 +119,7 @@ describe.skipIf(!url)("isolamento cross-tenant sul database", () => {
 
   it("margine: costi e dati economici di un progetto di un altro tenant restano invisibili", async () => {
     await expect(
-      addCost(ctxAttacker(), victimProjectId, { description: "costo intruso", amount: 100, incurredAt: "2026-01-01", budgetLineId: null }),
+      addCost(ctxAttacker(), victimProjectId, { description: "costo intruso", amount: 100, incurredAt: "2026-01-01", budgetLineId: null, partyId: null }),
     ).rejects.toThrow(MarginError);
     await expect(projectMargin(ctxAttacker(), victimProjectId)).rejects.toThrow(MarginError);
   });

@@ -30,7 +30,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     quote.status === "BOZZA" ? listServiceItems(ctx, quote.companyId) : Promise.resolve([]),
     quote.status === "BOZZA"
       ? ctx.db.party.findMany({
-          where: { kind: "CLIENTE", companies: { some: { companyId: quote.companyId } } },
+          where: { kinds: { has: "CLIENTE" }, companies: { some: { companyId: quote.companyId } } },
           select: { id: true, name: true },
           orderBy: { name: "asc" },
         })

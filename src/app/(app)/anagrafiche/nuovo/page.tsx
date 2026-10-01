@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { PartyForm } from "@/components/registry/PartyForm";
 import { requireModule } from "@/server/context";
 import { kindFromParam, PARAM_BY_KIND } from "@/server/registry/input";
-import { viewCompanies, writableCompanies } from "@/server/registry/service";
+import { canWriteFinance, viewCompanies, writableCompanies } from "@/server/registry/service";
 import { notFound } from "next/navigation";
+import { addPartyKindsAction, savePartyAction } from "../actions";
 
 export const metadata: Metadata = { title: "Nuova anagrafica" };
 
@@ -28,9 +29,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
       </header>
       <PartyForm
         companies={writable.map(({ id, name, colorLight }) => ({ id, name, colorLight }))}
+        kindOptions={[kind]}
+        canWriteFinance={canWriteFinance(ctx, writable.map((c) => c.id))}
+        basePath="/anagrafiche"
+        saveAction={savePartyAction}
+        addRoleAction={addPartyKindsAction}
         cancelHref={`/anagrafiche?tipo=${PARAM_BY_KIND[kind]}`}
         values={{
-          kind,
+          kinds: [kind],
           name: "",
           address: null,
           vatNumber: null,
@@ -43,6 +49,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
           categories: [],
           notes: null,
           companyIds: preset,
+          availabilityNote: null,
+          paymentIban: null,
+          paymentHolder: null,
+          fiscalDocumentType: null,
+          paymentTerms: null,
         }}
       />
     </div>

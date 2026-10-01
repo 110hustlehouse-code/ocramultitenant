@@ -55,7 +55,7 @@ describe.skipIf(!url)("solleciti ai clienti sul database", () => {
     luca = await user("Luca", "CREATIVE");
     ext = await user("Esterno", "EXTERNAL");
     // Cliente senza email del referente: la si chiede all'avvio.
-    clientId = (await prisma.party.create({ data: { tenantId, kind: "CLIENTE", name: "Nora Vale Srl" } })).id;
+    clientId = (await prisma.party.create({ data: { tenantId, kinds: ["CLIENTE"], name: "Nora Vale Srl" } })).id;
     await prisma.partyCompany.create({ data: { tenantId, partyId: clientId, companyId: duit.id } });
     projectId = (await prisma.project.create({ data: { tenantId, companyId: duit.id, name: "Videoclip Nora", clientId, managerId: pm.id } })).id;
     internalProjectId = (await prisma.project.create({ data: { tenantId, companyId: duit.id, name: "Interno" } })).id;

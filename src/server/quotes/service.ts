@@ -107,7 +107,7 @@ async function writableQuote(ctx: AppContext, id: string) {
 }
 
 async function assertClient(ctx: AppContext, companyId: string, clientId: string) {
-  const ok = await ctx.db.party.count({ where: { id: clientId, kind: "CLIENTE", companies: { some: { companyId } } } });
+  const ok = await ctx.db.party.count({ where: { id: clientId, kinds: { has: "CLIENTE" }, companies: { some: { companyId } } } });
   if (!ok) throw new QuoteError("Scegli un cliente della società.");
 }
 

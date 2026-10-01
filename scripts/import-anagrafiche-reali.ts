@@ -173,7 +173,7 @@ async function main() {
       SOURCES.filter((s) => s.kind === kind).flatMap((s) => parseRows(s.file, s.kind, companyId.get(s.companySlug)!, issues)),
     );
 
-    const existing = await db.party.findMany({ where: { kind } });
+    const existing = await db.party.findMany({ where: { kinds: { has: kind } } });
     const byKey = new Map<string, (typeof existing)[number]>();
     for (const p of existing) {
       if (p.vatNumber) byKey.set(`vat:${p.vatNumber}`, p);
@@ -205,7 +205,7 @@ async function main() {
         partyId = match.id;
         updated++;
       } else {
-        const party = await db.party.create({ data: { kind, ...fields, tenantId: tenant.id } });
+        const party = await db.party.create({ data: { kinds: [kind], ...fields, tenantId: tenant.id } });
         partyId = party.id;
         for (const k of [identityKey(data), `name:${key(data.name)}`]) byKey.set(k, party);
         created++;

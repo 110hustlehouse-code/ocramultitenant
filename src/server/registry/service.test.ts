@@ -1,12 +1,14 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient, type Company } from "@/generated/prisma/client";
-import type { Role } from "@/generated/prisma/enums";
+import type { PartyKind, Role } from "@/generated/prisma/enums";
 import type { AppContext } from "@/server/context";
 import { tenantExtension } from "@/server/db/tenant";
 import { canInView, resolveCompanyView, type CompanyAccess } from "@/server/company/selection";
 import { parsePartiesCsv } from "./csv";
-import { createParty, deleteParty, importParties, listParties, RegistryError, updateParty } from "./service";
+import { addPartyKinds, createParty, deleteParty, importParties, listParties, PartyConflictError, RegistryError, updateParty } from "./service";
+
+const adminNulls = { availabilityNote: null, paymentIban: null, paymentHolder: null, fiscalDocumentType: null, paymentTerms: null };
 
 // Integrazione: gira solo se c'è un database (Codespaces, CI).
 const url = process.env.DATABASE_URL;
@@ -81,22 +83,52 @@ describe.skipIf(!url)("anagrafiche sul database", () => {
 
   it("un PM di Duit non può assegnare anagrafiche a Fulcro", async () => {
     const pmDuit = ctxFor([[duit, "PROJECT_MANAGER"]]);
-    const base = { kind: "FORNITORE" as const, name: "Noleggi Srl", address: null, vatNumber: null, taxCode: null, pec: null, sdiCode: null, contactName: null, email: null, phone: null, categories: [], notes: null };
+    const base = { kinds: ["FORNITORE"] as PartyKind[], name: "Noleggi Srl", address: null, vatNumber: null, taxCode: null, pec: null, sdiCode: null, contactName: null, email: null, phone: null, categories: [], notes: null, ...adminNulls };
     await expect(createParty(pmDuit, { ...base, companyIds: [fulcro.id] })).rejects.toThrow(RegistryError);
     const created = await createParty(pmDuit, { ...base, companyIds: [duit.id] });
     expect(created.tenantId).toBe(tenantId);
   });
 
-  it("P.IVA duplicata: bloccata con messaggio chiaro", async () => {
+  it("P.IVA duplicata nello stesso ruolo: bloccata con messaggio chiaro", async () => {
     const ceo = ctxFor([[fulcro, "CEO"]]);
-    const base = { kind: "CLIENTE" as const, name: "Doppione", address: null, vatNumber: "16633211004", taxCode: null, pec: null, sdiCode: null, contactName: null, email: null, phone: null, categories: [], notes: null, companyIds: [fulcro.id] };
+    const base = { kinds: ["CLIENTE"] as PartyKind[], name: "Doppione", address: null, vatNumber: "16633211004", taxCode: null, pec: null, sdiCode: null, contactName: null, email: null, phone: null, categories: [], notes: null, companyIds: [fulcro.id], ...adminNulls };
     await expect(createParty(ceo, base)).rejects.toThrow(/Esiste già/);
+  });
+
+  it("P.IVA duplicata in un ruolo diverso: propone di aggiungere il ruolo invece di duplicare", async () => {
+    const ceo = ctxFor([[fulcro, "CEO"]]);
+    const base = {
+      kinds: ["FORNITORE"] as PartyKind[],
+      name: "Zetema come fornitore",
+      address: null,
+      vatNumber: "16633211004", // stessa P.IVA di "Zetema S.p.A.", oggi solo CLIENTE
+      taxCode: null,
+      pec: null,
+      sdiCode: null,
+      contactName: null,
+      email: null,
+      phone: null,
+      categories: [],
+      notes: null,
+      companyIds: [fulcro.id],
+      ...adminNulls,
+    };
+    const err = await createParty(ceo, base).catch((e) => e);
+    expect(err).toBeInstanceOf(PartyConflictError);
+    expect((err as PartyConflictError).missingKinds).toEqual(["FORNITORE"]);
+    const partyId = (err as PartyConflictError).partyId;
+
+    await addPartyKinds(ceo, partyId, ["FORNITORE"]);
+    const updated = await prisma.party.findUniqueOrThrow({ where: { id: partyId } });
+    expect(updated.kinds.sort()).toEqual(["CLIENTE", "FORNITORE"]);
+    // Non si è creata una seconda riga.
+    expect(await prisma.party.count({ where: { tenantId, vatNumber: "16633211004" } })).toBe(1);
   });
 
   it("modifica ed eliminazione toccano solo le società dell'utente", async () => {
     const z = await prisma.party.findFirstOrThrow({ where: { tenantId, vatNumber: "16633211004" } });
     const pmDuit = ctxFor([[duit, "PROJECT_MANAGER"]]);
-    const data = { kind: "CLIENTE" as const, name: "Zetema", address: null, vatNumber: "16633211004", taxCode: null, pec: null, sdiCode: null, contactName: null, email: null, phone: null, categories: [], notes: null };
+    const data = { kinds: ["CLIENTE"] as PartyKind[], name: "Zetema", address: null, vatNumber: "16633211004", taxCode: null, pec: null, sdiCode: null, contactName: null, email: null, phone: null, categories: [], notes: null, ...adminNulls };
     // Il PM di Duit toglie Duit: Fulcro resta collegata anche se non la vede.
     await expect(updateParty(pmDuit, z.id, { ...data, companyIds: [] as string[] })).resolves.toBeUndefined();
     const links = await prisma.partyCompany.findMany({ where: { partyId: z.id } });

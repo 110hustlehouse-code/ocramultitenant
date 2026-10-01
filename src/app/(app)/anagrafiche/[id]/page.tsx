@@ -3,9 +3,9 @@ import { notFound } from "next/navigation";
 import { PartyForm } from "@/components/registry/PartyForm";
 import { buttonClass, CompanyTag } from "@/components/registry/ui";
 import { requireModule } from "@/server/context";
-import { PARAM_BY_KIND } from "@/server/registry/input";
-import { getParty, writableCompanies } from "@/server/registry/service";
-import { deletePartyAction } from "../actions";
+import { ALL_PARTY_KINDS, KIND_LABELS, PARAM_BY_KIND } from "@/server/registry/input";
+import { canWriteFinance, getParty, writableCompanies } from "@/server/registry/service";
+import { addPartyKindsAction, deletePartyAction, savePartyAction } from "../actions";
 
 export const metadata: Metadata = { title: "Anagrafica" };
 
@@ -17,13 +17,14 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const writable = writableCompanies(ctx);
   const linked = party.companies.map((c) => c.companyId);
   const canEdit = linked.some((id) => writable.some((w) => w.id === id));
-  const tipo = PARAM_BY_KIND[party.kind];
+  const tipo = PARAM_BY_KIND[party.kinds[0] ?? "CLIENTE"];
   const others = ctx.companies.filter((c) => linked.includes(c.id) && !writable.some((w) => w.id === c.id));
+  const finance = canWriteFinance(ctx, linked);
 
   return (
     <div className="max-w-3xl space-y-6">
       <header className="space-y-2">
-        <p className="label">{party.kind === "CLIENTE" ? "Cliente" : "Fornitore"}</p>
+        <p className="label">{party.kinds.map((k) => KIND_LABELS[k]).join(" · ")}</p>
         <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight">{party.name}</h1>
         {others.length > 0 && (
           <p className="flex flex-wrap items-center gap-2 text-sm text-muted">
@@ -39,6 +40,11 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         <>
           <PartyForm
             companies={writable.map(({ id, name, colorLight }) => ({ id, name, colorLight }))}
+            kindOptions={[...ALL_PARTY_KINDS]}
+            canWriteFinance={finance}
+            basePath="/anagrafiche"
+            saveAction={savePartyAction}
+            addRoleAction={addPartyKindsAction}
             cancelHref={`/anagrafiche?tipo=${tipo}`}
             values={{ ...party, companyIds: linked }}
           />

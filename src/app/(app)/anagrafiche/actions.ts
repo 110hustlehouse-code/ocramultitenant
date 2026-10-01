@@ -2,13 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { PartyKind } from "@/generated/prisma/enums";
 import { assertNotBlocked, getContext } from "@/server/context";
 import { parsePartiesCsv, type ImportIssue } from "@/server/registry/csv";
 import { fieldErrors, kindFromParam, PARAM_BY_KIND, partyFromFormData, partyInputSchema } from "@/server/registry/input";
 import {
+  addPartyKinds,
   createParty,
   deleteParty,
   importParties,
+  PartyConflictError,
   RegistryError,
   updateParty,
   viewCompanies,
@@ -17,7 +20,13 @@ import {
 
 /** `values`: quanto inviato, per ripopolare il form dopo un errore (React lo svuota dopo l'azione). */
 export type FormState =
-  | { errors?: Record<string, string>; message?: string; values?: ReturnType<typeof partyFromFormData> }
+  | {
+      errors?: Record<string, string>;
+      message?: string;
+      values?: ReturnType<typeof partyFromFormData>;
+      /** L'anagrafica esiste già con un altro ruolo: si propone di aggiungere quello mancante invece di duplicarla. */
+      conflict?: { partyId: string; partyName: string; missingKinds: PartyKind[] };
+    }
   | undefined;
 
 async function writer() {
@@ -40,11 +49,28 @@ export async function savePartyAction(_prev: FormState, fd: FormData): Promise<F
     if (id) await updateParty(ctx, id, parsed.data);
     else await createParty(ctx, parsed.data);
   } catch (e) {
+    if (e instanceof PartyConflictError) {
+      return { message: e.message, values, conflict: { partyId: e.partyId, partyName: e.partyName, missingKinds: e.missingKinds } };
+    }
     if (e instanceof RegistryError) return { message: e.message, values };
     throw e;
   }
   revalidatePath("/anagrafiche");
-  redirect(`/anagrafiche?tipo=${PARAM_BY_KIND[parsed.data.kind]}`);
+  redirect(`/anagrafiche?tipo=${PARAM_BY_KIND[parsed.data.kinds[0]!]}`);
+}
+
+/** Dalla proposta di conflitto: aggiunge il ruolo mancante all'anagrafica esistente invece di duplicarla. */
+export async function addPartyKindsAction(fd: FormData): Promise<void> {
+  const ctx = await writer();
+  const partyId = String(fd.get("partyId") ?? "");
+  const kinds = fd.getAll("missingKinds").map(String) as PartyKind[];
+  try {
+    await addPartyKinds(ctx, partyId, kinds);
+  } catch (e) {
+    if (!(e instanceof RegistryError)) throw e;
+  }
+  revalidatePath("/anagrafiche");
+  redirect(`/anagrafiche/${partyId}`);
 }
 
 export async function deletePartyAction(fd: FormData): Promise<void> {

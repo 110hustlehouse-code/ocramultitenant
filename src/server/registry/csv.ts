@@ -191,7 +191,7 @@ export function parsePartiesCsv(
     }
 
     const parsed = partyInputSchema.safeParse({
-      kind,
+      kinds: [kind],
       name: one("name") ?? "",
       address: one("address"),
       vatNumber: one("vatNumber"),

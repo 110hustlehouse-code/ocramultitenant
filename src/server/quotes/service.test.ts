@@ -66,7 +66,7 @@ describe.skipIf(!url)("preventivi sul database", () => {
     await prisma.membership.create({ data: { tenantId, userId: ceo.id, companyId: as.id, role: "CEO" } });
     await prisma.membership.create({ data: { tenantId, userId: pm.id, companyId: ap.id, role: "PROJECT_MANAGER" } });
     const party = async (name: string, companyId: string) => {
-      const p = await prisma.party.create({ data: { tenantId, kind: "CLIENTE", name } });
+      const p = await prisma.party.create({ data: { tenantId, kinds: ["CLIENTE"], name } });
       await prisma.partyCompany.create({ data: { tenantId, partyId: p.id, companyId } });
       return p.id;
     };

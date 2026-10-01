@@ -76,7 +76,7 @@ describe.skipIf(!url)("impostazioni società", () => {
     await updateCompanySettings(asCeo(), duit.id, { ...baseInput, nextQuoteNumber: 30 });
     expect((await getCompanySettings(asCeo(), duit.id)).nextQuoteNumber).toBe(30);
 
-    const client = await prisma.party.create({ data: { tenantId, kind: "CLIENTE", name: "Cliente test" } });
+    const client = await prisma.party.create({ data: { tenantId, kinds: ["CLIENTE"], name: "Cliente test" } });
     await prisma.quote.create({
       data: { tenantId, companyId: duit.id, clientId: client.id, number: 30, title: "Preventivo 1", issueDate: new Date() },
     });

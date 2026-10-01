@@ -19,7 +19,7 @@ describe.skipIf(!url)("PDF preventivo: footer con IBAN", () => {
     });
     ceo = await prisma.user.create({ data: { tenantId, email: `ceo-${suffix}@t.local`, name: "Daniele" } });
     await prisma.membership.create({ data: { tenantId, userId: ceo.id, companyId: company.id, role: "CEO" } });
-    client = await prisma.party.create({ data: { tenantId, kind: "CLIENTE", name: "Cliente test" } });
+    client = await prisma.party.create({ data: { tenantId, kinds: ["CLIENTE"], name: "Cliente test" } });
     await prisma.partyCompany.create({ data: { tenantId, partyId: client.id, companyId: company.id } });
   });
 

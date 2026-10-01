@@ -96,7 +96,7 @@ export async function assignableUsers(ctx: AppContext, companyId: string) {
 /** Clienti selezionabili per un progetto della società. */
 export async function clientsFor(ctx: AppContext, companyId: string) {
   return ctx.db.party.findMany({
-    where: { kind: "CLIENTE", companies: { some: { companyId } } },
+    where: { kinds: { has: "CLIENTE" }, companies: { some: { companyId } } },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
@@ -112,7 +112,7 @@ async function assertUsersInCompany(ctx: AppContext, companyId: string, userIds:
 async function assertClient(ctx: AppContext, companyId: string, clientId: string | null) {
   if (!clientId) return;
   const ok = await ctx.db.party.count({
-    where: { id: clientId, kind: "CLIENTE", companies: { some: { companyId } } },
+    where: { id: clientId, kinds: { has: "CLIENTE" }, companies: { some: { companyId } } },
   });
   if (!ok) throw new ProjectError("Cliente non valido per questa società.");
 }
