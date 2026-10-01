@@ -8,7 +8,7 @@ import { cn } from "@/lib/cn";
 import { formatDay } from "@/lib/dates";
 import { formatEuro } from "@/lib/quotes";
 import { requireModule } from "@/server/context";
-import { MarginError, projectMargin } from "@/server/margine/service";
+import { MarginError, payeesFor, projectMargin } from "@/server/margine/service";
 import { deleteCostAction } from "../actions";
 
 export const metadata: Metadata = { title: "Margine progetto" };
@@ -24,6 +24,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     throw e;
   }
   const { project, lines, costs, atRisk, ...summary } = margin;
+  const payees = await payeesFor(ctx, project.companyId);
 
   return (
     <div className="space-y-8">
@@ -81,7 +82,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
 
       <section className="space-y-3">
         <h2 className="label">Costi reali registrati</h2>
-        <AddCostForm projectId={project.id} lines={lines.map((l) => ({ id: l.id, description: l.description }))} />
+        <AddCostForm projectId={project.id} lines={lines.map((l) => ({ id: l.id, description: l.description }))} payees={payees} />
         {costs.length === 0 ? (
           <p className="text-sm text-muted">Nessun costo registrato.</p>
         ) : (
@@ -93,6 +94,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
                   <p className="text-xs text-muted">
                     {formatDay(c.incurredAt)} · {c.createdBy?.name ?? "—"}
                     {c.budgetLine && <> · {c.budgetLine.description}</>}
+                    {c.party && <> · pagato a {c.party.name}</>}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">

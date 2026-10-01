@@ -4,7 +4,7 @@ import { PrismaClient, type Company, type User } from "@/generated/prisma/client
 import { ALL_COMPANIES } from "@/server/company/selection";
 import { projectBudget } from "@/server/quotes/service";
 import { testContext } from "@/test/context";
-import { addCost, budgetLineLabels, deleteCost, MarginError, marginBoard, projectMargin } from "./service";
+import { addCost, budgetLineLabels, deleteCost, MarginError, marginBoard, payeesFor, projectMargin } from "./service";
 
 const url = process.env.DATABASE_URL;
 describe.skipIf(!url)("margine sul database", () => {
@@ -14,6 +14,7 @@ describe.skipIf(!url)("margine sul database", () => {
   let duit: Company, fulcro: Company;
   let ceo: User, pm: User, ceoFulcro: User;
   let projectId: string, lineA: string, lineB: string;
+  let collaboratorDuit: string, collaboratorFulcro: string;
 
   const ctxFor = (u: User, roles: Array<[Company, "CEO" | "PROJECT_MANAGER"]>, view?: string) => {
     const c = testContext(prisma, tenantId, u.id, roles, view);
@@ -48,6 +49,14 @@ describe.skipIf(!url)("margine sul database", () => {
     await task("Girato 1", "FATTO", lineA);
     await task("Girato 2", "DA_FARE", lineA);
     await task("Export", "FATTO", lineB);
+
+    const collaborator = async (name: string, companyId: string) => {
+      const p = await prisma.party.create({ data: { tenantId, kinds: ["COLLABORATORE_ESTERNO"], name } });
+      await prisma.partyCompany.create({ data: { tenantId, partyId: p.id, companyId } });
+      return p.id;
+    };
+    collaboratorDuit = await collaborator("Marco Freelance", duit.id);
+    collaboratorFulcro = await collaborator("Altra Fulcro", fulcro.id);
   });
 
   afterAll(async () => {
@@ -78,7 +87,7 @@ describe.skipIf(!url)("margine sul database", () => {
   });
 
   it("costo interno stimato dai task chiusi, non dalle ore; costi manuali sommati", async () => {
-    await addCost(asCeo(), projectId, { description: "Service audio esterno", amount: 5_000, incurredAt: "2026-09-20", budgetLineId: lineA });
+    await addCost(asCeo(), projectId, { description: "Service audio esterno", amount: 5_000, incurredAt: "2026-09-20", budgetLineId: lineA, partyId: null });
     const margin = await projectMargin(asCeo(), projectId);
 
     expect(margin.revenue).toBe(150_000);
@@ -95,11 +104,30 @@ describe.skipIf(!url)("margine sul database", () => {
     expect(margin.costs[0]).toMatchObject({ description: "Service audio esterno", amount: 5_000 });
   });
 
+  it("un costo può collegarsi a un collaboratore della stessa società, non di un'altra", async () => {
+    expect((await payeesFor(asCeo(), duit.id)).map((p) => p.id)).toEqual([collaboratorDuit]);
+
+    const cost = await addCost(asCeo(), projectId, {
+      description: "Service audio esterno",
+      amount: 2_000,
+      incurredAt: "2026-09-22",
+      budgetLineId: null,
+      partyId: collaboratorDuit,
+    });
+    expect(cost.partyId).toBe(collaboratorDuit);
+    await deleteCost(asCeo(), cost.id);
+
+    // collaboratorFulcro non è collegato a Duit: non si può pagare da un progetto Duit.
+    await expect(
+      addCost(asCeo(), projectId, { description: "xx", amount: 100, incurredAt: "2026-09-22", budgetLineId: null, partyId: collaboratorFulcro }),
+    ).rejects.toThrow(/non valido/);
+  });
+
   it("registrare o cancellare un costo reale è azione del CEO, mai del PM", async () => {
     await expect(
-      addCost(asPm(), projectId, { description: "x", amount: 100, incurredAt: "2026-09-20", budgetLineId: null }),
+      addCost(asPm(), projectId, { description: "x", amount: 100, incurredAt: "2026-09-20", budgetLineId: null, partyId: null }),
     ).rejects.toThrow(MarginError);
-    const cost = await addCost(asCeo(), projectId, { description: "Trasferta", amount: 3_000, incurredAt: "2026-09-21", budgetLineId: null });
+    const cost = await addCost(asCeo(), projectId, { description: "Trasferta", amount: 3_000, incurredAt: "2026-09-21", budgetLineId: null, partyId: null });
     await expect(deleteCost(asPm(), cost.id)).rejects.toThrow(MarginError);
     await deleteCost(asCeo(), cost.id);
     expect(await prisma.projectCost.findUnique({ where: { id: cost.id } })).toBeNull();
@@ -110,7 +138,7 @@ describe.skipIf(!url)("margine sul database", () => {
     const other = await prisma.project.create({ data: { tenantId, companyId: duit.id, name: "Altro", status: "CHIUSO" } });
     const otherLine = await prisma.projectBudgetLine.create({ data: { tenantId, projectId: other.id, description: "x", revenue: 1000 } });
     await expect(
-      addCost(asCeo(), projectId, { description: "voce", amount: 100, incurredAt: "2026-09-20", budgetLineId: otherLine.id }),
+      addCost(asCeo(), projectId, { description: "voce", amount: 100, incurredAt: "2026-09-20", budgetLineId: otherLine.id, partyId: null }),
     ).rejects.toThrow(/non valida/);
   });
 

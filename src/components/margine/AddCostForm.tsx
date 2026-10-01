@@ -6,7 +6,16 @@ import { buttonClass, inputClass } from "@/components/registry/ui";
 import { addCostAction } from "@/app/(app)/margine/actions";
 
 /** Registra un costo reale: lo fa il CEO quando arriva una spesa (fattura, esterno, acquisto). Mai in automatico. */
-export function AddCostForm({ projectId, lines }: { projectId: string; lines: { id: string; description: string }[] }) {
+export function AddCostForm({
+  projectId,
+  lines,
+  payees,
+}: {
+  projectId: string;
+  lines: { id: string; description: string }[];
+  /** Collaboratori e fornitori della società, per dire a chi è stato pagato */
+  payees: { id: string; name: string }[];
+}) {
   const [state, action, pending] = useActionState(addCostAction, undefined);
 
   return (
@@ -26,6 +35,14 @@ export function AddCostForm({ projectId, lines }: { projectId: string; lines: { 
           <Plus className="size-4" aria-hidden /> Registra
         </button>
       </div>
+      {payees.length > 0 && (
+        <select name="partyId" aria-label="Pagato a" className={inputClass} defaultValue="">
+          <option value="">Pagato a: nessuno in rubrica</option>
+          {payees.map((p) => (
+            <option key={p.id} value={p.id}>Pagato a: {p.name}</option>
+          ))}
+        </select>
+      )}
       {state?.error && <p className="text-xs text-danger">{state.error}</p>}
     </form>
   );

@@ -45,7 +45,7 @@ export async function projectMargin(ctx: AppContext, projectId: string) {
       budgetLines: { include: budgetLineInclude, orderBy: { sortOrder: "asc" } },
       costs: {
         orderBy: { incurredAt: "desc" },
-        include: { createdBy: { select: { name: true } }, budgetLine: { select: { description: true } } },
+        include: { createdBy: { select: { name: true } }, budgetLine: { select: { description: true } }, party: { select: { id: true, name: true } } },
       },
     },
   });
@@ -118,6 +118,8 @@ export const costInputSchema = z.object({
   amount: z.number().int().positive("Importo non valido"),
   incurredAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data non valida"),
   budgetLineId: z.string().min(1).nullable(),
+  /** Collaboratore o fornitore pagato, se registrato in rubrica */
+  partyId: z.string().min(1).nullable(),
 });
 export type CostInput = z.infer<typeof costInputSchema>;
 
@@ -127,7 +129,17 @@ export function costFromFormData(fd: FormData) {
     amount: parseEuro(String(fd.get("amount") ?? "")) ?? -1,
     incurredAt: String(fd.get("incurredAt") ?? ""),
     budgetLineId: fd.get("budgetLineId")?.toString() || null,
+    partyId: fd.get("partyId")?.toString() || null,
   };
+}
+
+/** Collaboratori e fornitori della società, per il campo «Pagato a» nel form costo. */
+export async function payeesFor(ctx: AppContext, companyId: string) {
+  return ctx.db.party.findMany({
+    where: { companies: { some: { companyId } }, kinds: { hasSome: ["FORNITORE", "COLLABORATORE_INTERNO", "COLLABORATORE_ESTERNO"] } },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
 }
 
 /** Registra un costo reale (fattura, esterno, acquisto): lo fa una persona, mai un automatismo. */
@@ -141,11 +153,16 @@ export async function addCost(ctx: AppContext, projectId: string, input: CostInp
     const ok = await ctx.db.projectBudgetLine.count({ where: { id: parsed.data.budgetLineId, projectId } });
     if (!ok) throw new MarginError("Riga di budget non valida per questo progetto.");
   }
+  if (parsed.data.partyId) {
+    const ok = await ctx.db.party.count({ where: { id: parsed.data.partyId, companies: { some: { companyId: project.companyId } } } });
+    if (!ok) throw new MarginError("Collaboratore o fornitore non valido per questa società.");
+  }
   return ctx.db.projectCost.create({
     data: {
       tenantId: ctx.tenant.id,
       projectId,
       budgetLineId: parsed.data.budgetLineId,
+      partyId: parsed.data.partyId,
       description: parsed.data.description,
       amount: parsed.data.amount,
       incurredAt: parseDay(parsed.data.incurredAt),
