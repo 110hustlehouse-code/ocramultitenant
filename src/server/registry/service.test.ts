@@ -6,7 +6,17 @@ import type { AppContext } from "@/server/context";
 import { tenantExtension } from "@/server/db/tenant";
 import { canInView, resolveCompanyView, type CompanyAccess } from "@/server/company/selection";
 import { parsePartiesCsv } from "./csv";
-import { addPartyKinds, createParty, deleteParty, importParties, listParties, PartyConflictError, RegistryError, updateParty } from "./service";
+import {
+  addPartyKinds,
+  checkPartyConflict,
+  createParty,
+  deleteParty,
+  importParties,
+  listParties,
+  PartyConflictError,
+  RegistryError,
+  updateParty,
+} from "./service";
 
 const adminNulls = { availabilityNote: null, paymentIban: null, paymentHolder: null, fiscalDocumentType: null, paymentTerms: null };
 
@@ -95,6 +105,17 @@ describe.skipIf(!url)("anagrafiche sul database", () => {
     await expect(createParty(ceo, base)).rejects.toThrow(/Esiste già/);
   });
 
+  it("controllo anticipato: trova il conflitto anche a form incompleto (solo P.IVA, senza nome)", async () => {
+    const ceo = ctxFor([[fulcro, "CEO"]]);
+    // Chi scrive solo la P.IVA per vedere se l'anagrafica esiste già non ha ancora
+    // compilato il nome: il conflitto deve comunque emergere, non restare nascosto
+    // dietro "ragione sociale obbligatoria".
+    const conflict = await checkPartyConflict(ceo, { vatNumber: "16633211004", taxCode: null }, ["FORNITORE"]);
+    expect(conflict).toBeInstanceOf(PartyConflictError);
+    expect(conflict?.missingKinds).toEqual(["FORNITORE"]);
+    expect(conflict?.partyName).toBe("Zetema S.p.A.");
+  });
+
   it("P.IVA duplicata in un ruolo diverso: propone di aggiungere il ruolo invece di duplicare", async () => {
     const ceo = ctxFor([[fulcro, "CEO"]]);
     const base = {
@@ -123,6 +144,20 @@ describe.skipIf(!url)("anagrafiche sul database", () => {
     expect(updated.kinds.sort()).toEqual(["CLIENTE", "FORNITORE"]);
     // Non si è creata una seconda riga.
     expect(await prisma.party.count({ where: { tenantId, vatNumber: "16633211004" } })).toBe(1);
+  });
+
+  it("modifica: P.IVA duplicata in un ruolo diverso propone di aggiungere il ruolo (come in creazione)", async () => {
+    const ceo = ctxFor([[fulcro, "CEO"]]);
+    const base = { address: null, taxCode: null, pec: null, sdiCode: null, contactName: null, email: null, phone: null, categories: [] as string[], notes: null, companyIds: [fulcro.id], ...adminNulls };
+    const supplier = await createParty(ceo, { ...base, kinds: ["FORNITORE"], name: "Service Provider", vatNumber: "18051641001" });
+    const other = await createParty(ceo, { ...base, kinds: ["CLIENTE"], name: "Altro cliente", vatNumber: null });
+
+    // Modifico "Altro cliente" per diventare anche fornitore con la P.IVA di "Service Provider":
+    // stessa persona reale, non deve creare una seconda riga né un errore generico.
+    const err = await updateParty(ceo, other.id, { ...base, kinds: ["CLIENTE", "FORNITORE"], name: "Altro cliente", vatNumber: "18051641001" }).catch((e) => e);
+    expect(err).toBeInstanceOf(PartyConflictError);
+    expect((err as PartyConflictError).partyId).toBe(supplier.id);
+    expect((err as PartyConflictError).missingKinds).toEqual(["CLIENTE"]);
   });
 
   it("modifica ed eliminazione toccano solo le società dell'utente", async () => {

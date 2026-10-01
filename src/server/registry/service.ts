@@ -1,6 +1,7 @@
 import "server-only";
 import type { Company, Prisma } from "@/generated/prisma/client";
 import type { PartyKind } from "@/generated/prisma/enums";
+import { isValidTaxCode, isValidVat, normalizeTaxCode, normalizeVat } from "@/lib/italian";
 import { can } from "@/server/auth/permissions";
 import type { AppContext } from "@/server/context";
 import { ALL_PARTY_KINDS } from "./input";
@@ -132,6 +133,32 @@ async function findDuplicate(ctx: AppContext, d: Pick<PartyInput, "vatNumber" | 
   });
 }
 
+/**
+ * Controllo duplicati indipendente dal resto del form: usato PRIMA della validazione completa,
+ * così chi scrive solo la P.IVA per vedere se l'anagrafica esiste già ottiene una risposta anche
+ * se non ha ancora compilato la ragione sociale (bug reale: altrimenti "nome obbligatorio" nasconde
+ * il conflitto, perché partyInputSchema valida tutto il form prima che si arrivi al controllo P.IVA).
+ * `null` = nessun conflitto da segnalare qui (o perché non c'è duplicato, o perché i ruoli richiesti
+ * ci sono già tutti: in quel caso ci pensa la validazione normale a dare il messaggio giusto).
+ */
+export async function checkPartyConflict(
+  ctx: AppContext,
+  raw: { vatNumber?: string | null; taxCode?: string | null },
+  requestedKinds: PartyKind[],
+  excludeId?: string,
+): Promise<PartyConflictError | null> {
+  const vat = raw.vatNumber?.trim() ? normalizeVat(raw.vatNumber) : null;
+  const cf = raw.taxCode?.trim() ? normalizeTaxCode(raw.taxCode) : null;
+  const vatOk = vat && isValidVat(vat) ? vat : null;
+  const cfOk = cf && isValidTaxCode(cf) ? cf : null;
+  if (!vatOk && !cfOk) return null;
+  const dup = await findDuplicate(ctx, { vatNumber: vatOk, taxCode: cfOk }, excludeId);
+  if (!dup) return null;
+  const missingKinds = requestedKinds.filter((k) => !dup.kinds.includes(k));
+  if (missingKinds.length === 0) return null;
+  return new PartyConflictError(dup.id, dup.name, missingKinds);
+}
+
 export async function createParty(ctx: AppContext, d: PartyInput) {
   assertWritable(ctx, d.companyIds);
   const dup = await findDuplicate(ctx, d);
@@ -166,7 +193,11 @@ export async function updateParty(ctx: AppContext, id: string, d: PartyInput) {
   if (!current) throw new RegistryError("Anagrafica non trovata.");
   assertWritable(ctx, d.companyIds);
   const dup = await findDuplicate(ctx, d, id);
-  if (dup) throw new RegistryError(`P.IVA o codice fiscale già usati da: ${dup.name}.`);
+  if (dup) {
+    const missingKinds = d.kinds.filter((k) => !dup.kinds.includes(k));
+    if (missingKinds.length === 0) throw new RegistryError(`P.IVA o codice fiscale già usati da: ${dup.name}.`);
+    throw new PartyConflictError(dup.id, dup.name, missingKinds);
+  }
 
   // Tocca solo i collegamenti alle società che l'utente gestisce; gli altri restano.
   const writable = new Set(writableCompanies(ctx).map((c) => c.id));

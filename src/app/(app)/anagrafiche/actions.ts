@@ -8,6 +8,7 @@ import { parsePartiesCsv, type ImportIssue } from "@/server/registry/csv";
 import { fieldErrors, kindFromParam, PARAM_BY_KIND, partyFromFormData, partyInputSchema } from "@/server/registry/input";
 import {
   addPartyKinds,
+  checkPartyConflict,
   createParty,
   deleteParty,
   importParties,
@@ -41,10 +42,18 @@ async function writer() {
 export async function savePartyAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const ctx = await writer();
   const values = partyFromFormData(fd);
+  const id = fd.get("id")?.toString();
+
+  // Controllo duplicati prima della validazione completa: altrimenti "nome obbligatorio"
+  // nasconde il conflitto a chi sta solo verificando se una P.IVA esiste già.
+  const earlyConflict = await checkPartyConflict(ctx, { vatNumber: values.vatNumber, taxCode: values.taxCode }, values.kinds as PartyKind[], id);
+  if (earlyConflict) {
+    return { message: earlyConflict.message, values, conflict: { partyId: earlyConflict.partyId, partyName: earlyConflict.partyName, missingKinds: earlyConflict.missingKinds } };
+  }
+
   const parsed = partyInputSchema.safeParse(values);
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values };
 
-  const id = fd.get("id")?.toString();
   try {
     if (id) await updateParty(ctx, id, parsed.data);
     else await createParty(ctx, parsed.data);
