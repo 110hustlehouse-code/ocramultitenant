@@ -69,6 +69,7 @@ model Tenant {
   accountBlocks           AccountBlock[]
   documents               Document[]
   collaboratorEvaluations CollaboratorEvaluation[]
+  passwordResetTokens     PasswordResetToken[]
 }
 
 /// Società del tenant (Fulcro, Duit, St'Art). Porta il branding.
@@ -137,11 +138,19 @@ model User {
   /// Solo per EXTERNAL: dopo questa data l'accesso è negato
   accessExpiresAt DateTime?
   lastLoginAt     DateTime?
+  /// Login con password (accanto a Google OAuth): null = nessun login con password configurato
+  passwordHash         String?
+  /// Password assegnata dal CEO: true finché non la cambia, blocca ogni pagina tranne il cambio password
+  mustChangePassword   Boolean   @default(false)
+  failedLoginAttempts  Int       @default(0)
+  /// Login con password negato finché non passa questa data (brute-force sullo stesso account)
+  lockedUntil          DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   tenant                      Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   memberships                 Membership[]
+  passwordResetTokens         PasswordResetToken[]
   managedProjects             Project[]                @relation("ProjectManager")
   projectMembers              ProjectMember[]
   assignedTasks               Task[]                   @relation("TaskAssignee")
@@ -185,6 +194,24 @@ model Membership {
   @@unique([userId, companyId])
   @@index([tenantId])
   @@index([companyId])
+}
+
+/// Token monouso per "password dimenticata". Si salva solo l'hash: il token in chiaro
+/// vive solo nel link mandato per email, mai nel DB (stesso pattern dei token dei Verbali).
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tenantId  String
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
 }
 
 enum PartyKind {
