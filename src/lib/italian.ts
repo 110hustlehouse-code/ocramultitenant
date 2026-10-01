@@ -47,6 +47,23 @@ export function isValidSdi(raw: string): boolean {
   return /^[A-Z0-9]{7}$/.test(normalizeSdi(raw));
 }
 
+export function normalizeIban(raw: string): string {
+  return clean(raw);
+}
+
+/** IBAN: formato (paese + cifre di controllo + BBAN) e cifra di controllo mod-97. */
+export function isValidIban(raw: string): boolean {
+  const v = normalizeIban(raw);
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(v)) return false;
+  const rearranged = v.slice(4) + v.slice(0, 4);
+  let remainder = 0;
+  for (const ch of rearranged) {
+    const value = ch >= "0" && ch <= "9" ? ch : String(ch.charCodeAt(0) - 55);
+    for (const digit of value) remainder = (remainder * 10 + Number(digit)) % 97;
+  }
+  return remainder === 1;
+}
+
 /** Telefono: solo cifre e + iniziale; aggiunge +39 ai cellulari italiani senza prefisso. */
 export function normalizePhone(raw: string): string {
   const v = raw.replace(/[^\d+]/g, "");

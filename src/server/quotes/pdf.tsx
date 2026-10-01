@@ -29,6 +29,13 @@ function registerFonts() {
   fontsReady = true;
 }
 
+/** Testo libero (o dati legali di default) più l'IBAN, se la società l'ha compilato. */
+function footerLine(c: QuoteWithLines["company"]): string {
+  const legal = `${c.legalName ?? c.name}${c.vatNumber ? ` · P.IVA ${c.vatNumber}` : ""}`;
+  const bank = c.bankIban ? `IBAN ${c.bankIban}${c.bankAccountHolder ? ` (${c.bankAccountHolder})` : ""}` : null;
+  return [c.quoteFooter ?? legal, bank].filter(Boolean).join(" · ");
+}
+
 /** Logo: file in public/ (es. /brands/duit.png) o URL assoluto. SVG non supportato dal PDF. */
 function logoSource(url: string | null): string | null {
   if (!url || url.toLowerCase().endsWith(".svg")) return null;
@@ -209,7 +216,7 @@ function QuoteDocument({ quote }: { quote: QuoteWithLines }) {
         )}
 
         <View style={s.footer} fixed>
-          <Text style={{ maxWidth: 420 }}>{c.quoteFooter ?? `${c.legalName ?? c.name}${c.vatNumber ? ` · P.IVA ${c.vatNumber}` : ""}`}</Text>
+          <Text style={{ maxWidth: 420 }}>{footerLine(c)}</Text>
           <Text render={({ pageNumber, totalPages }) => `${label} · ${pageNumber}/${totalPages}`} />
         </View>
       </Page>

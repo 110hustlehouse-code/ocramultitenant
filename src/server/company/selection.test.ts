@@ -20,6 +20,8 @@ const company = (slug: string): Company => ({
   legalAddress: null,
   legalRepresentative: null,
   poPrefix: null,
+  bankIban: null,
+  bankAccountHolder: null,
   nextQuoteNumber: 1,
   quoteTerms: null,
   quoteValidityDays: 30,
