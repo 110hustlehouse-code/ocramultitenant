@@ -19,6 +19,8 @@ const company = (id: string, name: string, legalName: string, poPrefix: string):
   legalAddress: null,
   legalRepresentative: null,
   poPrefix,
+  bankIban: null,
+  bankAccountHolder: null,
   nextQuoteNumber: 1,
   quoteTerms: null,
   quoteValidityDays: 30,

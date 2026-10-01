@@ -92,6 +92,9 @@ model Company {
   legalRepresentative String?
   /// Acronimo usato nei codici PO (es. FL, DT)
   poPrefix            String?
+  /// Dati bancari: mostrati nel piè di pagina del preventivo
+  bankIban            String?
+  bankAccountHolder   String?
   /// Preventivi: prossimo numero (progressivo per società, continuo negli anni)
   nextQuoteNumber     Int      @default(1)
   /// Condizioni predefinite (es. «50% alla firma, saldo alla consegna»)

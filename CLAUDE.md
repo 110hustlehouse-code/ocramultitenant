@@ -24,6 +24,10 @@ Gestionale multi-tenant per agenzie che lavorano **a progetto**. Primo cliente: 
 - Ogni modifica allo schema = migrazione (`npm run db:migrate -- --name <nome>`), committata.
 - AI (Claude API) dove serve capire o scrivere; regole/n8n dove serve solo eseguire.
 - Notifiche: WhatsApp → email → web push. Mai costruire sulle push.
+- Documenti generati (preventivi, schede, contratti, fatture, ecc.): se in `docs/riferimenti/`
+  esiste un documento reale dello stesso tipo, il formato di OCRA ne replica esattamente la
+  struttura — mai un formato OCRA generico. Controlla `docs/riferimenti/` prima di disegnare
+  l'output di un modulo nuovo (così si è fatto per i Preventivi).
 
 ## Design
 Guscio neutro freddo; colore = società attiva. Archivo (titoli, numeri), Public Sans (testo),

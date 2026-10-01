@@ -1,4 +1,5 @@
-import { LogOut } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
+import Link from "next/link";
 import { CompanySwitcher } from "@/components/shell/CompanySwitcher";
 import { BlockedScreen } from "@/components/reminders/BlockedScreen";
 import { brandStyle } from "@/components/shell/brand";
@@ -8,9 +9,11 @@ import { MODULES } from "@/lib/modules";
 import { ROLE_LABELS } from "@/server/auth/permissions";
 import { selectCompany } from "@/server/company/actions";
 import { hasModuleAccess, getContext } from "@/server/context";
+import { manageableCompanies } from "@/server/users/service";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getContext();
+  const showSettings = manageableCompanies(ctx).length > 0;
 
   const blocked = ctx.blockedTaskIds.length > 0;
   const nav: NavItem[] = blocked
@@ -54,6 +57,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <p className="truncate text-sm font-semibold">{ctx.user.name}</p>
             <p className="label truncate">{ctx.role ? ROLE_LABELS[ctx.role] : "Vista consolidata"}</p>
           </div>
+          {showSettings && (
+            <Link
+              href="/impostazioni/utenti"
+              title="Impostazioni"
+              aria-label="Impostazioni"
+              className="inline-flex size-9 items-center justify-center rounded-md border border-border text-muted hover:bg-surface-2 hover:text-text"
+            >
+              <Settings className="size-4" aria-hidden />
+            </Link>
+          )}
           <ThemeToggle />
           <form action="/api/dev-logout" method="POST">
             <button
@@ -75,6 +88,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <span className="size-2.5 rounded-full bg-brand" aria-hidden />
             <span className="font-[family-name:var(--font-display)] text-lg font-extrabold">OCRA</span>
             <span className="ml-auto" />
+            {showSettings && (
+              <Link
+                href="/impostazioni/utenti"
+                aria-label="Impostazioni"
+                className="inline-flex size-9 items-center justify-center rounded-md border border-border text-muted"
+              >
+                <Settings className="size-4" aria-hidden />
+              </Link>
+            )}
             <ThemeToggle />
             <form action="/api/dev-logout" method="POST">
               <button

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isValidSdi, isValidTaxCode, isValidVat, normalizePhone, normalizeVat } from "./italian";
+import { isValidIban, isValidSdi, isValidTaxCode, isValidVat, normalizePhone, normalizeVat } from "./italian";
 
 describe("P.IVA", () => {
   it("accetta partite IVA reali (Fulcro, Duit)", () => {
@@ -43,5 +43,16 @@ describe("SDI e telefono", () => {
     expect(normalizePhone("331 226 9985")).toBe("+393312269985");
     expect(normalizePhone("+39 331 2269985")).toBe("+393312269985");
     expect(normalizePhone("0039 331 2269985")).toBe("+393312269985");
+  });
+});
+
+describe("IBAN", () => {
+  it("accetta IBAN reali, anche con spazi", () => {
+    expect(isValidIban("IT60 X054 2811 1010 0000 0123 456")).toBe(true);
+    expect(isValidIban("GB29 NWBK 6016 1331 9268 19")).toBe(true);
+  });
+  it("rifiuta cifra di controllo sbagliata e formati troppo corti", () => {
+    expect(isValidIban("IT60X0542811101000000123457")).toBe(false);
+    expect(isValidIban("IT60X05")).toBe(false);
   });
 });
