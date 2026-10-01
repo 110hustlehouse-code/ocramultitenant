@@ -9,6 +9,7 @@ import { partyInputSchema, splitList, type PartyInput } from "./input";
 
 type Field =
   | "name"
+  | "address"
   | "vatNumber"
   | "taxCode"
   | "pec"
@@ -28,6 +29,9 @@ const HEADER_ALIASES: Record<string, Field> = {
   nomecognome: "name",
   cliente: "name",
   fornitore: "name",
+  indirizzo: "address",
+  indirizzocompleto: "address",
+  via: "address",
   piva: "vatNumber",
   partitaiva: "vatNumber",
   pi: "vatNumber",
@@ -63,6 +67,7 @@ const HEADER_ALIASES: Record<string, Field> = {
 /** Colonne del modello scaricabile, nell'ordine. */
 export const TEMPLATE_HEADERS = [
   "Ragione sociale",
+  "Indirizzo",
   "P.IVA",
   "Codice fiscale",
   "PEC",
@@ -188,6 +193,7 @@ export function parsePartiesCsv(
     const parsed = partyInputSchema.safeParse({
       kind,
       name: one("name") ?? "",
+      address: one("address"),
       vatNumber: one("vatNumber"),
       taxCode: one("taxCode"),
       pec: one("pec"),

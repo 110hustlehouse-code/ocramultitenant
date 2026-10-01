@@ -32,6 +32,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ t
         values={{
           kind,
           name: "",
+          address: null,
           vatNumber: null,
           taxCode: null,
           pec: null,

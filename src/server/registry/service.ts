@@ -61,6 +61,7 @@ export class RegistryError extends Error {}
 
 const fields = (d: PartyInput) => ({
   name: d.name,
+  address: d.address,
   vatNumber: d.vatNumber,
   taxCode: d.taxCode,
   pec: d.pec,

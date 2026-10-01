@@ -12,6 +12,7 @@ export type PartyFormValues = {
   id?: string;
   kind: "CLIENTE" | "FORNITORE";
   name: string;
+  address: string | null;
   vatNumber: string | null;
   taxCode: string | null;
   pec: string | null;
@@ -74,6 +75,7 @@ export function PartyForm({
       <fieldset className="grid gap-4 rounded-xl border border-border bg-surface p-5 sm:grid-cols-2">
         <legend className="label px-1">Dati fiscali</legend>
         {text("name", "Ragione sociale o nome", { className: "sm:col-span-2" })}
+        {text("address", "Indirizzo", { hint: "Via, CAP, città — compare sul preventivo se presente", className: "sm:col-span-2" })}
         {text("vatNumber", "P.IVA", { hint: "11 cifre, con o senza IT" })}
         {text("taxCode", "Codice fiscale", { hint: "Per le persone fisiche (artisti, collaboratori)" })}
         {text("pec", "PEC", { type: "email" })}

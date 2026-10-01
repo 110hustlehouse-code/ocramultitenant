@@ -53,6 +53,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       ) : (
         <dl className="grid gap-4 rounded-xl border border-border bg-surface p-5 sm:grid-cols-2">
           {[
+            ["Indirizzo", party.address],
             ["P.IVA", party.vatNumber],
             ["Codice fiscale", party.taxCode],
             ["PEC", party.pec],
