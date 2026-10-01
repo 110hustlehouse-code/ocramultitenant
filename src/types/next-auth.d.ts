@@ -5,6 +5,8 @@ declare module "next-auth" {
     user: {
       id: string;
       tenantId: string;
+      /** true finché non cambia la password iniziale assegnata dal CEO (solo login a password) */
+      mustChangePassword: boolean;
     } & DefaultSession["user"];
   }
 }

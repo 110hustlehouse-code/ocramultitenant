@@ -9,7 +9,9 @@ import { authConfig } from "@/auth.config";
  */
 const { auth } = NextAuth(authConfig);
 
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = ["/login", "/password/dimenticata", "/password/reimposta"];
+/** Unica pagina raggiungibile da chi deve ancora cambiare la password assegnata dal CEO. */
+const CHANGE_PASSWORD_PATH = "/password/nuova";
 
 export default auth((req) => {
   const { pathname, search } = req.nextUrl;
@@ -20,6 +22,12 @@ export default auth((req) => {
     url.searchParams.set("callbackUrl", `${pathname}${search}`);
     return NextResponse.redirect(url);
   }
+
+  // Ottimistico come il resto del proxy: la sorgente di verità resta il DB (pagina stessa + azione).
+  if (req.auth?.user.mustChangePassword && pathname !== CHANGE_PASSWORD_PATH && !isPublic) {
+    return NextResponse.redirect(new URL(CHANGE_PASSWORD_PATH, req.nextUrl));
+  }
+
   return NextResponse.next();
 });
 

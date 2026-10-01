@@ -27,6 +27,10 @@ export async function signInDev(formData: FormData) {
   await run("dev-login", formData, { email: formData.get("email") });
 }
 
+export async function signInWithPassword(formData: FormData) {
+  await run("password-login", formData, { email: formData.get("email"), password: formData.get("password") });
+}
+
 export async function signOutAction() {
   await signOut({ redirectTo: "/login" });
 }

@@ -11,10 +11,11 @@ export const authConfig = {
   providers: [],
   callbacks: {
     session({ session, token }) {
-      const { uid, tid } = token;
+      const { uid, tid, mcp } = token;
       if (typeof uid === "string" && typeof tid === "string") {
         session.user.id = uid;
         session.user.tenantId = tid;
+        session.user.mustChangePassword = mcp === true;
       }
       return session;
     },

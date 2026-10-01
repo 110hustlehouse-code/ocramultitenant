@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isDevLoginEnabled, isGoogleEnabled } from "@/env";
-import { signInWithGoogle } from "@/server/auth/actions";
+import { signInWithGoogle, signInWithPassword } from "@/server/auth/actions";
 
 export const metadata: Metadata = { title: "Accedi" };
 
 const ERRORS: Record<string, string> = {
   AccessDenied: "Questo account non è abilitato su OCRA. Chiedi l'accesso al tuo amministratore.",
-  CredentialsSignin: "Email non riconosciuta o accesso scaduto.",
+  CredentialsSignin: "Email o password non corretti, account bloccato per troppi tentativi, o accesso non più valido.",
   Configuration: "Accesso non configurato correttamente. Controlla le variabili d'ambiente.",
 };
 
@@ -19,10 +20,10 @@ const DEV_ACCOUNTS = [
   { email: "esterno@ocra.local", label: "Esterno" },
 ];
 
-type Props = { searchParams: Promise<{ error?: string; callbackUrl?: string }> };
+type Props = { searchParams: Promise<{ error?: string; callbackUrl?: string; cambiata?: string }> };
 
 export default async function LoginPage({ searchParams }: Props) {
-  const { error, callbackUrl } = await searchParams;
+  const { error, callbackUrl, cambiata } = await searchParams;
   const session = await auth();
   if (session?.user?.id && !error) redirect(callbackUrl?.startsWith("/") ? callbackUrl : "/");
 
@@ -38,6 +39,12 @@ export default async function LoginPage({ searchParams }: Props) {
           <p className="font-[family-name:var(--font-display)] text-4xl font-extrabold tracking-tight">OCRA</p>
           <p className="text-muted">Il gestionale per chi lavora a progetto</p>
         </div>
+
+        {cambiata && !message && (
+          <p role="status" className="rounded-lg border border-border bg-surface p-3 text-center text-sm">
+            Password aggiornata. Accedi con quella nuova.
+          </p>
+        )}
 
         {message && (
           <div role="alert" className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm">
@@ -65,10 +72,36 @@ export default async function LoginPage({ searchParams }: Props) {
             </form>
           )}
 
-          {!google && !dev && (
+          <form
+            action={signInWithPassword}
+            className="space-y-3 border-t border-dashed border-border pt-4 first:border-0 first:pt-0"
+          >
+            <input type="hidden" name="callbackUrl" value={target} />
+            <label className="block text-sm">
+              <span className="label">Email</span>
+              <input type="email" name="email" required className="mt-1 w-full rounded-md border border-border bg-surface-2 px-3 py-2" />
+            </label>
+            <label className="block text-sm">
+              <span className="label">Password</span>
+              <input type="password" name="password" required className="mt-1 w-full rounded-md border border-border bg-surface-2 px-3 py-2" />
+            </label>
+            <button
+              type="submit"
+              className="w-full rounded-md border border-border px-4 py-2.5 text-sm font-semibold hover:bg-surface-2"
+            >
+              Accedi con email e password
+            </button>
+            <p className="text-center text-sm">
+              <Link href="/password/dimenticata" className="underline">
+                Password dimenticata?
+              </Link>
+            </p>
+          </form>
+
+          {!google && (
             <p className="text-sm text-muted">
-              Nessun metodo di accesso configurato. Imposta <code className="font-mono">AUTH_GOOGLE_ID</code> e{" "}
-              <code className="font-mono">AUTH_GOOGLE_SECRET</code>.
+              Accesso con Google non configurato. Imposta <code className="font-mono">AUTH_GOOGLE_ID</code> e{" "}
+              <code className="font-mono">AUTH_GOOGLE_SECRET</code> per abilitarlo.
             </p>
           )}
 

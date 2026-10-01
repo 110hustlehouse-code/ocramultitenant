@@ -6,7 +6,8 @@ import { z } from "zod";
 import { authConfig } from "@/auth.config";
 import { isDevLoginEnabled, isGoogleEnabled } from "@/env";
 import { prisma } from "@/server/db/client";
-import { resolveLoginUser } from "@/server/auth/resolve-user";
+import { isLockedOut, verifyPassword } from "@/server/auth/password";
+import { recordFailedLogin, recordSuccessfulLogin, resolveLoginUser } from "@/server/auth/resolve-user";
 
 async function requestHost(): Promise<string | null> {
   try {
@@ -21,6 +22,27 @@ function buildProviders(): NextAuthConfig["providers"] {
   const providers: NextAuthConfig["providers"] = [];
 
   if (isGoogleEnabled()) providers.push(Google);
+
+  providers.push(
+    Credentials({
+      id: "password-login",
+      name: "Email e password",
+      credentials: { email: { label: "Email", type: "email" }, password: { label: "Password", type: "password" } },
+      async authorize(raw) {
+        const parsed = z.object({ email: z.email(), password: z.string().min(1) }).safeParse(raw);
+        if (!parsed.success) return null;
+        const user = await resolveLoginUser(parsed.data.email, await requestHost());
+        // Niente login a password configurato (solo OAuth), o account bloccato per troppi tentativi.
+        if (!user || !user.passwordHash || isLockedOut(user)) return null;
+        if (!(await verifyPassword(parsed.data.password, user.passwordHash))) {
+          await recordFailedLogin(user.id);
+          return null;
+        }
+        await recordSuccessfulLogin(user.id);
+        return { id: user.id, email: user.email, name: user.name };
+      },
+    }),
+  );
 
   if (isDevLoginEnabled()) {
     providers.push(
@@ -61,6 +83,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(() => ({
         if (!dbUser) return null;
         token.uid = dbUser.id;
         token.tid = dbUser.tenantId;
+        token.mcp = dbUser.mustChangePassword;
         await prisma.user.update({ where: { id: dbUser.id }, data: { lastLoginAt: new Date() } });
       }
       return token;
