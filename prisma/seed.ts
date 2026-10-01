@@ -14,7 +14,7 @@ const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url 
 
 const DAY = 24 * 60 * 60 * 1000;
 
-const MODULES: ModuleKey[] = ["ANAGRAFICHE", "PROGETTI", "VERBALI", "RICHIAMO", "SOLLECITI", "DOCUMENTI", "MARGINE", "PREVENTIVI"];
+const MODULES: ModuleKey[] = ["ANAGRAFICHE", "PROGETTI", "VERBALI", "RICHIAMO", "SOLLECITI", "DOCUMENTI", "MARGINE", "PREVENTIVI", "COLLABORATORI"];
 
 async function main() {
   const tenant = await prisma.tenant.upsert({
@@ -287,11 +287,11 @@ async function seedDemo() {
   ];
   for (const [kind, list] of [["CLIENTE", clients], ["FORNITORE", suppliers]] as const) {
     for (const p of list) {
-      const existing = await prisma.party.findFirst({ where: { tenantId: tenant.id, kind, name: p.name } });
+      const existing = await prisma.party.findFirst({ where: { tenantId: tenant.id, kinds: { has: kind }, name: p.name } });
       const data = { name: p.name, contactName: p.contact, email: p.email, categories: p.cats };
       const party = existing
         ? await prisma.party.update({ where: { id: existing.id }, data })
-        : await prisma.party.create({ data: { ...data, kind, tenantId: tenant.id } });
+        : await prisma.party.create({ data: { ...data, kinds: [kind], tenantId: tenant.id } });
       await prisma.partyCompany.createMany({
         data: p.at.map((prefix) => ({ tenantId: tenant.id, partyId: party.id, companyId: ids.get(prefix)! })),
         skipDuplicates: true,

@@ -34,6 +34,7 @@ enum ModuleKey {
   DOCUMENTI
   MARGINE
   PREVENTIVI
+  COLLABORATORI
 }
 
 /// Cliente di OCRA (es. il gruppo di Daniele Masini).
@@ -47,26 +48,27 @@ model Tenant {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  companies           Company[]
-  users               User[]
-  memberships         Membership[]
-  parties             Party[]
-  partyCompanies      PartyCompany[]
-  projects            Project[]
-  projectMembers      ProjectMember[]
-  tasks               Task[]
-  meetings            Meeting[]
-  meetingIntegrations MeetingIntegration[]
-  clientFollowUps     ClientFollowUp[]
-  clientMessages      ClientMessage[]
-  serviceItems        ServiceItem[]
-  quotes              Quote[]
-  quoteLines          QuoteLine[]
-  projectBudgetLines  ProjectBudgetLine[]
-  projectCosts        ProjectCost[]
-  reminders           Reminder[]
-  accountBlocks       AccountBlock[]
-  documents           Document[]
+  companies               Company[]
+  users                   User[]
+  memberships             Membership[]
+  parties                 Party[]
+  partyCompanies          PartyCompany[]
+  projects                Project[]
+  projectMembers          ProjectMember[]
+  tasks                   Task[]
+  meetings                Meeting[]
+  meetingIntegrations     MeetingIntegration[]
+  clientFollowUps         ClientFollowUp[]
+  clientMessages          ClientMessage[]
+  serviceItems            ServiceItem[]
+  quotes                  Quote[]
+  quoteLines              QuoteLine[]
+  projectBudgetLines      ProjectBudgetLine[]
+  projectCosts            ProjectCost[]
+  reminders               Reminder[]
+  accountBlocks           AccountBlock[]
+  documents               Document[]
+  collaboratorEvaluations CollaboratorEvaluation[]
 }
 
 /// Società del tenant (Fulcro, Duit, St'Art). Porta il branding.
@@ -110,14 +112,15 @@ model Company {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  memberships         Membership[]
-  parties             PartyCompany[]
-  projects            Project[]
-  meetings            Meeting[]
-  meetingIntegrations MeetingIntegration[]
-  serviceItems        ServiceItem[]
-  quotes              Quote[]
+  tenant                  Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships             Membership[]
+  parties                 PartyCompany[]
+  projects                Project[]
+  meetings                Meeting[]
+  meetingIntegrations     MeetingIntegration[]
+  serviceItems            ServiceItem[]
+  quotes                  Quote[]
+  collaboratorEvaluations CollaboratorEvaluation[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -137,24 +140,27 @@ model User {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  memberships         Membership[]
-  managedProjects     Project[]            @relation("ProjectManager")
-  projectMembers      ProjectMember[]
-  assignedTasks       Task[]               @relation("TaskAssignee")
-  completedTasks      Task[]               @relation("TaskCompletedBy")
-  meetings            Meeting[]
-  meetingIntegrations MeetingIntegration[]
-  followUpsStarted    ClientFollowUp[]     @relation("FollowUpStartedBy")
-  followUpsResolved   ClientFollowUp[]     @relation("FollowUpResolvedBy")
-  clientMessagesSent  ClientMessage[]
-  quotesCreated       Quote[]
-  projectCostsCreated ProjectCost[]
-  reminders           Reminder[]           @relation("ReminderRecipient")
-  blocks              AccountBlock[]       @relation("BlockedUser")
-  blocksIssued        AccountBlock[]       @relation("BlockedBy")
-  documentsUploaded   Document[]           @relation("DocumentUploadedBy")
-  documentsApproved   Document[]           @relation("DocumentApprovedBy")
+  tenant                      Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships                 Membership[]
+  managedProjects             Project[]                @relation("ProjectManager")
+  projectMembers              ProjectMember[]
+  assignedTasks               Task[]                   @relation("TaskAssignee")
+  completedTasks              Task[]                   @relation("TaskCompletedBy")
+  meetings                    Meeting[]
+  meetingIntegrations         MeetingIntegration[]
+  followUpsStarted            ClientFollowUp[]         @relation("FollowUpStartedBy")
+  followUpsResolved           ClientFollowUp[]         @relation("FollowUpResolvedBy")
+  clientMessagesSent          ClientMessage[]
+  quotesCreated               Quote[]
+  projectCostsCreated         ProjectCost[]
+  reminders                   Reminder[]               @relation("ReminderRecipient")
+  blocks                      AccountBlock[]           @relation("BlockedUser")
+  blocksIssued                AccountBlock[]           @relation("BlockedBy")
+  documentsUploaded           Document[]               @relation("DocumentUploadedBy")
+  documentsApproved           Document[]               @relation("DocumentApprovedBy")
+  /// Scheda collaboratore collegata, se questo utente ha anche una riga Party (rubrica)
+  collaboratorParty           Party?
+  collaboratorEvaluationsMade CollaboratorEvaluation[]
 
   @@unique([tenantId, email])
   @@index([email])
@@ -184,44 +190,75 @@ model Membership {
 enum PartyKind {
   CLIENTE
   FORNITORE
+  /// Persona fisica con collaborazione continuativa (categoria di spesa, processo 19 Contabilità)
+  COLLABORATORE_INTERNO
+  /// Freelance, consulente, partner creativo (categoria di spesa, processo 19 Contabilità)
+  COLLABORATORE_ESTERNO
 }
 
-/// Anagrafica: un cliente o un fornitore del gruppo.
-/// Stessa struttura per entrambi (richiesta di Daniele, 28 set). Le persone fisiche
+/// Tipo di documento emesso dal collaboratore/fornitore per i pagamenti.
+enum FiscalDocumentType {
+  FATTURA
+  NOTULA
+  /// Cessione di diritti d'autore con ritenuta d'acconto (tipico per creativi/artisti)
+  CESSIONE_DIRITTI_RITENUTA
+  ALTRO
+}
+
+/// Anagrafica: cliente, fornitore o collaboratore del gruppo.
+/// Stessa struttura per tutti (richiesta di Daniele, 28 set). Le persone fisiche
 /// (artisti, collaboratori) hanno il codice fiscale al posto della P.IVA.
+///
+/// `kinds` è un array, non un valore solo: la STESSA persona/società può essere allo stesso
+/// tempo, es., fornitore e collaboratore esterno — un'unica riga, due ruoli. Non è un caso
+/// ipotetico: nei dati reali 11 anagrafiche esistono già duplicate come righe CLIENTE +
+/// FORNITORE separate con lo stesso CF/P.IVA (migrazione `*_collaboratori`); non vengono
+/// fuse automaticamente qui — è un'pulizia dati a parte, deliberata, non in questa modifica.
 model Party {
-  id          String    @id @default(cuid())
-  tenantId    String
-  kind        PartyKind
+  id                 String              @id @default(cuid())
+  tenantId           String
+  kinds              PartyKind[]
   /// Ragione sociale, o nome e cognome per le persone fisiche
-  name        String
-  vatNumber   String?
-  taxCode     String?
-  pec         String?
-  sdiCode     String?
+  name               String
+  vatNumber          String?
+  taxCode            String?
+  pec                String?
+  sdiCode            String?
   /// Indirizzo per l'intestazione del preventivo (via, CAP, città); compare solo se presente
-  address     String?
+  address            String?
   /// Referente: nome, email e cellulare
-  contactName String?
-  email       String?
-  phone       String?
-  /// Categorie merceologiche, al massimo 3
-  categories  String[]  @default([])
+  contactName        String?
+  email              String?
+  phone              String?
+  /// Categorie merceologiche / ruolo-competenze per i collaboratori (es. "Videomaker"), al massimo 3
+  categories         String[]            @default([])
   /// Sigla per il codice PO (es. TEATRONUOVO); se manca si ricava dal nome
-  shortCode   String?
-  notes       String?
-  active      Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  shortCode          String?
+  /// Solo collaboratori/fornitori: disponibilità indicativa (es. "3 giorni/settimana")
+  availabilityNote   String?
+  /// Dati di pagamento — visibili solo con finance:read, stesso pattern di Company.bankIban
+  paymentIban        String?
+  paymentHolder      String?
+  fiscalDocumentType FiscalDocumentType?
+  /// Testo libero, come Company.quoteTerms (es. "Entro il 5 del mese successivo" / "60 giorni data fattura")
+  paymentTerms       String?
+  /// Collaboratore con accesso all'app: collegamento opzionale 1:1, mai obbligatorio
+  linkedUserId       String?             @unique
+  notes              String?
+  active             Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
-  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  companies PartyCompany[]
-  projects  Project[]
-  followUps ClientFollowUp[]
-  quotes    Quote[]
+  tenant      Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  linkedUser  User?                    @relation(fields: [linkedUserId], references: [id], onDelete: SetNull)
+  companies   PartyCompany[]
+  projects    Project[]
+  followUps   ClientFollowUp[]
+  quotes      Quote[]
+  costs       ProjectCost[]
+  evaluations CollaboratorEvaluation[]
 
-  @@unique([tenantId, kind, vatNumber])
-  @@index([tenantId, kind])
+  @@index([tenantId])
 }
 
 /// Società di riferimento di un'anagrafica (può lavorare con più società del gruppo).
@@ -286,19 +323,20 @@ model Project {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
-  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  company             Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  client              Party?               @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  manager             User?                @relation("ProjectManager", fields: [managerId], references: [id], onDelete: SetNull)
-  members             ProjectMember[]
-  tasks               Task[]
-  meetings            Meeting[]
-  meetingIntegrations MeetingIntegration[]
-  followUps           ClientFollowUp[]
-  documents           Document[]
-  quote               Quote?
-  budgetLines         ProjectBudgetLine[]
-  costs               ProjectCost[]
+  tenant                  Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company                 Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  client                  Party?                   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  manager                 User?                    @relation("ProjectManager", fields: [managerId], references: [id], onDelete: SetNull)
+  members                 ProjectMember[]
+  tasks                   Task[]
+  meetings                Meeting[]
+  meetingIntegrations     MeetingIntegration[]
+  followUps               ClientFollowUp[]
+  documents               Document[]
+  quote                   Quote?
+  budgetLines             ProjectBudgetLine[]
+  costs                   ProjectCost[]
+  collaboratorEvaluations CollaboratorEvaluation[]
 
   @@unique([tenantId, code])
   @@index([tenantId, companyId, status])
@@ -730,24 +768,24 @@ model Quote {
 
 /// Voce del preventivo: copia della voce di listino (il preventivo non cambia se cambia il listino).
 model QuoteLine {
-  id            String  @id @default(cuid())
-  tenantId      String
-  quoteId       String
+  id              String   @id @default(cuid())
+  tenantId        String
+  quoteId         String
   /// null = voce fuori listino
-  serviceItemId String?
-  description   String
-  quantity      Decimal @db.Decimal(10, 2)
-  unit          String
+  serviceItemId   String?
+  description     String
+  quantity        Decimal  @db.Decimal(10, 2)
+  unit            String
   /// Centesimi
-  unitPrice     Int
+  unitPrice       Int
   /// Percentuale (0-100); null = nessuno sconto. Mai proposto dall'AI, lo aggiunge il CEO.
   discountPercent Decimal? @db.Decimal(5, 2)
   /// Aliquota IVA di questa riga (di norma quella del preventivo al momento della creazione)
-  vatRate       Int
-  total         Int
+  vatRate         Int
+  total           Int
   /// Costo previsto (interno, mai nel PDF), in centesimi: diventa il costo di budget
-  plannedCost   Int?
-  sortOrder     Int     @default(0)
+  plannedCost     Int?
+  sortOrder       Int      @default(0)
 
   tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   quote       Quote              @relation(fields: [quoteId], references: [id], onDelete: Cascade)
@@ -775,10 +813,10 @@ model ProjectBudgetLine {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  quoteLine   QuoteLine?   @relation(fields: [quoteLineId], references: [id], onDelete: SetNull)
-  serviceItem ServiceItem? @relation(fields: [serviceItemId], references: [id], onDelete: SetNull)
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  quoteLine   QuoteLine?    @relation(fields: [quoteLineId], references: [id], onDelete: SetNull)
+  serviceItem ServiceItem?  @relation(fields: [serviceItemId], references: [id], onDelete: SetNull)
   tasks       Task[]
   costs       ProjectCost[]
 
@@ -793,6 +831,8 @@ model ProjectCost {
   projectId    String
   /// Riga di budget a cui imputarlo (facoltativo: una spesa può non mappare una voce precisa)
   budgetLineId String?
+  /// A chi è stato pagato (collaboratore o fornitore), se registrato in rubrica
+  partyId      String?
   description  String
   /// Centesimi
   amount       Int
@@ -803,8 +843,33 @@ model ProjectCost {
   tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   project    Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   budgetLine ProjectBudgetLine? @relation(fields: [budgetLineId], references: [id], onDelete: SetNull)
+  party      Party?             @relation(fields: [partyId], references: [id], onDelete: SetNull)
   createdBy  User?              @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([tenantId, projectId])
   @@index([budgetLineId])
+  @@index([partyId])
+}
+
+/// Scheda di valutazione di un collaboratore, di norma a fine collaborazione su un progetto.
+model CollaboratorEvaluation {
+  id            String   @id @default(cuid())
+  tenantId      String
+  partyId       String
+  companyId     String
+  projectId     String?
+  /// 1-5
+  rating        Int
+  notes         String?
+  evaluatedById String?
+  createdAt     DateTime @default(now())
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  party       Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  evaluatedBy User?    @relation(fields: [evaluatedById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, partyId])
+  @@index([companyId])
 }
