@@ -1,6 +1,8 @@
 # Piano: messa online di OCRA (gruppo Masini)
 
-Stato: **in corso — Fase 1 e 2 chiuse, Fase 3 pronta a iniziare (serve l'utente)**.
+Stato: **in corso — Fase 1 e 2 chiuse, Fase 3 avanzata (Supabase/Vercel/R2/dominio/Google
+OAuth fatti; produzione online). In sospeso ora: verifica SMTP register.it via route
+temporanea `/api/test-email`, non ancora mergeata — vedi ultima voce di log.**
 
 Lavoro lungo e autonomo su richiesta esplicita: si procede senza chiedere conferme sulle scelte
 tecniche (già prese), ci si ferma solo per azioni fisiche dell'utente (creare un account, fare
@@ -21,8 +23,9 @@ a compattazioni e riavvii — è la fonte di verità sullo stato di avanzamento,
   (produzione multi-tenant). **demo.ocrapigmento.com** sarà un'istanza demo separata (progetto
   Vercel a parte, database Supabase a parte, seed demo, reset dati notturno) — **fase
   successiva alla messa online, non ora**.
-- Email transazionali (reset password, inviti): mittente **noreply@ocrapigmento.com**, con SPF,
-  DKIM e DMARC configurati
+- Email transazionali (reset password, inviti): mittente **noreply@ocrapigmento.com**, SMTP di
+  **register.it** (`authsmtp.securemail.pro`, porta 465 SSL) — *non* Resend/Postmark/SES,
+  deciso il 2026-10-02
 
 ## Avanzamento per fase
 
@@ -79,7 +82,7 @@ account, login CLI, incollare un valore). Elenco completo di cosa serve, prima d
 | `ANTHROPIC_API_KEY` | console Anthropic | per i verbali (estrazione task dall'AI) |
 | `DEEPGRAM_API_KEY` | Deepgram | trascrizione audio — opzionale, solo se si usa quella funzione |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | Cloudflare R2 | bucket **documenti** di produzione, credenziali scoped solo a quello |
-| `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | il provider email scelto per noreply@ocrapigmento.com | vedi nota email sotto |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | register.it (`authsmtp.securemail.pro`) | **✅ già inserite in Production** — vedi verifica invio sotto |
 | `CRON_SECRET` | generato | protegge `/api/cron/richiami` |
 | `APP_URL` | — | `https://app.ocrapigmento.com` |
 
@@ -93,11 +96,9 @@ account, login CLI, incollare un valore). Elenco completo di cosa serve, prima d
 | `R2_BACKUP_BUCKET` | secret | bucket R2 **backup**, separato da quello documenti |
 | `BACKUP_ENABLED` | variable (non segreto) | `true` per accendere il workflow notturno |
 
-**Nota email transazionali**: il codice invia via SMTP diretto (`nodemailer`, pensato per Google
-Workspace). Per un mittente `noreply@ocrapigmento.com` con SPF/DKIM/DMARC servono o (a) una
-casella Google Workspace su quel dominio con password per le app, o (b) un provider
-transazionale (Resend, Postmark, SES...) con relay SMTP — da decidere insieme quando si arriva
-a questo punto, è l'unica cosa infrastrutturale non già scelta in partenza.
+**Nota email transazionali — decisa**: il codice invia via SMTP diretto (`nodemailer`),
+compatibile con qualunque provider. Scelto register.it (casella già esistente sul dominio),
+non Google Workspace né un provider transazionale terzo. Dettagli e verifica più sotto.
 
 **Account/servizi da creare o configurare** (azioni fisiche, una alla volta quando si arriva lì):
 1. ✅ Progetto Supabase (Central EU, Frankfurt)
@@ -117,7 +118,11 @@ a questo punto, è l'unica cosa infrastrutturale non già scelta in partenza.
 5. ✅ Google Cloud OAuth: progetto dedicato **"ocrapigmento"**, client **"ocra-produzione"**,
    redirect su `app.ocrapigmento.com`, app in modalità **Testing** (l'utente aggiunge a mano
    gli utenti di test — nessuna pubblicazione pubblica del client OAuth per ora)
-6. ⏳ Provider email per `noreply@ocrapigmento.com` — **proposta sotto**
+6. 🔄 Provider email: **decisione dell'utente — register.it**, non Resend (proposta scartata).
+   `SMTP_HOST=authsmtp.securemail.pro`, porta 465 SSL, utente = indirizzo completo
+   `noreply@ocrapigmento.com`. Le 5 variabili `SMTP_*` sono in Production su Vercel
+   (verificato con `vercel env ls production`). **Passo attuale**: verifica di invio reale
+   dalla produzione — vedi sotto
 7. ⏳ I 6 secret + 1 variabile GitHub Actions per il backup — `gh secret set` dà 403
    (permessi del token CLI), l'utente li inserisce dal sito GitHub
 8. ⏳ `DEEPGRAM_API_KEY` (trascrizione audio, opzionale) — rimandato
@@ -127,19 +132,25 @@ a questo punto, è l'unica cosa infrastrutturale non già scelta in partenza.
    `NODE_ENV=production` anche lì. Non blocca Production (che ora funziona), da estendere a
    Preview quando si vorranno Preview funzionanti per le PR.
 
-**Proposta provider email — Resend.** Piano gratuito adatto (3.000 email/mese, 100/giorno —
-di più di quanto serva per reset password e inviti). Si collega con **zero modifiche al
-codice**: l'app invia già via SMTP generico (`nodemailer`, `src/server/notify/email.ts`), e
-Resend espone un relay SMTP compatibile — basta puntarci le variabili già esistenti:
-- `SMTP_HOST=smtp.resend.com`, `SMTP_PORT=465`, `SMTP_USER=resend` (letterale), `SMTP_PASS=`
-  la API key di Resend, `SMTP_FROM=noreply@ocrapigmento.com`
-- Resend chiede di verificare il dominio `ocrapigmento.com` con record DNS (SPF, DKIM, un
-  record di verifica) da aggiungere su Cloudflare — stesso tipo di passo già fatto per il
-  dominio Vercel, additivo, non tocca `www`
-Alternative valutate: Postmark (ottima deliverability, piano gratuito solo 100 email **totali**
-di prova, poi a pagamento) e SES (più economico su volumi alti, ma setup più macchinoso — serve
-uscire dal sandbox mode AWS con una richiesta). Per i volumi di questo progetto, Resend è il
-più semplice da collegare e il piano gratuito basta avanzare.
+**Email — decisione finale: register.it, non Resend.** Proposto Resend (vedi log sotto per il
+confronto con Postmark/SES), ma l'utente ha scelto la casella `noreply@ocrapigmento.com` già
+su register.it: zero nuovo account, stesso dominio del DNS già gestito lì/su Cloudflare.
+Nessuna modifica al codice (SMTP generico via `nodemailer`, come previsto).
+
+**Verifica invio reale — passo attuale.** Route temporanea `src/app/api/test-email/route.ts`
+(branch `worktree-test-email-prod`, commit `2d41cf0`, già pushato, **PR non ancora aperta**):
+`GET /api/test-email?to=<email>` con `Authorization: Bearer <CRON_SECRET>`, chiama il vero
+`sendEmail()` di produzione. Da rimuovere subito dopo l'uso (è un endpoint di sola verifica,
+non deve restare in produzione).
+
+Prossimo passo esatto, nell'ordine:
+1. Aprire la PR per `worktree-test-email-prod`, aspettare il check CI, mergeare su `main`
+   (il merge triggera il redeploy automatico di produzione con le variabili SMTP già presenti)
+2. Chiedere all'utente di esportare `CRON_SECRET` nella sua shell (mai incollarlo in chat)
+3. Chiamare `GET https://app.ocrapigmento.com/api/test-email?to=<email dell'utente>` (o
+   l'URL `.vercel.app` se il dominio non è ancora propagato) con quell'header, leggere il
+   `SendResult` (`delivered`, `messageId` o `error`) e riferire all'utente se l'email arriva
+4. **Rimuovere la route** `src/app/api/test-email/` con una PR separata subito dopo
 
 **Promemoria per dopo la messa online**: `demo.ocrapigmento.com`, istanza demo separata
 (Vercel + Supabase a parte, seed demo, reset notturno) — non ora.
@@ -273,3 +284,35 @@ Soluzione verificata (generate, check, deploy, seed, build — tutti testati in 
 - Rimandati a domani: `DEEPGRAM_API_KEY`, provider email (proposto Resend, vedi sopra), i
   secret GitHub del backup (`gh secret set` dà 403 con l'autenticazione CLI corrente —
   l'utente li inserisce dal sito).
+
+### 2026-10-02 — Email: register.it al posto di Resend, verifica invio in corso
+
+- L'utente ha scartato la proposta Resend: usa la casella già esistente
+  `noreply@ocrapigmento.com` su register.it. `SMTP_HOST=authsmtp.securemail.pro`, porta 465
+  SSL, utente = indirizzo completo. Le 5 variabili `SMTP_*` sono state inserite in Production
+  su Vercel (verificato con `vercel env ls production`, presenti da 14 minuti al momento del
+  controllo).
+- Creata una route temporanea `src/app/api/test-email/route.ts` per un invio di prova reale
+  dalla produzione (richiesta esplicita dell'utente): `GET /api/test-email?to=<email>` con
+  `Authorization: Bearer <CRON_SECRET>` (stesso schema di `/api/cron/richiami`), chiama il
+  vero `sendEmail()` di produzione. **Committata e pushata** su `worktree-test-email-prod`
+  (commit `2d41cf0`) — **PR non ancora aperta**.
+
+**Stato esatto all'interruzione**: in attesa di aprire la PR per questa route, aspettare la
+CI, mergeare (il merge fa ripartire il deploy di produzione con le variabili SMTP già
+presenti), poi chiedere all'utente di esportare `CRON_SECRET` nella sua shell per poter
+chiamare l'endpoint e verificare se l'email arriva davvero. **Non ancora verificato se la
+build locale passa** con la nuova route (non ancora lanciato `npm run check`/`npm run build`
+in questo giro).
+
+**Prossimo passo esatto, in ordine:**
+1. `npm run check` e `npm run build` in locale per la route nuova
+2. Aprire la PR per `worktree-test-email-prod`, aspettare il check CI, mergeare su `main`
+3. Chiedere all'utente di esportare `CRON_SECRET` nella sua shell (mai incollarlo in chat)
+4. Chiamare `GET https://app.ocrapigmento.com/api/test-email?to=<email dell'utente>` (o
+   l'URL `.vercel.app` se il dominio non è ancora propagato), leggere il `SendResult` e
+   riferire all'utente se l'email arriva
+5. **Rimuovere la route di test** con una PR separata subito dopo — non deve restare in
+   produzione
+6. Il record DNS `A app 76.76.21.21` (DNS only) su Cloudflare per `app.ocrapigmento.com`
+   resta ancora da aggiungere da parte dell'utente (segnalato in precedenza, non confermato)
