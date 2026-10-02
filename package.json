@@ -60,6 +60,11 @@
     "vitest": "5.0.1",
     "xlsx": "0.18.5"
   },
+  "overrides": {
+    "next-auth": {
+      "nodemailer": "$nodemailer"
+    }
+  },
   "engines": {
     "node": "22.x"
   }
