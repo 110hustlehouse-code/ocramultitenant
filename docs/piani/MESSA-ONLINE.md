@@ -1,6 +1,6 @@
 # Piano: messa online di OCRA (gruppo Masini)
 
-Stato: **in corso — Fase 1 chiusa, Fase 2 in corso**.
+Stato: **in corso — Fase 1 e 2 chiuse, Fase 3 pronta a iniziare (serve l'utente)**.
 
 Lavoro lungo e autonomo su richiesta esplicita: si procede senza chiedere conferme sulle scelte
 tecniche (già prese), ci si ferma solo per azioni fisiche dell'utente (creare un account, fare
@@ -32,7 +32,7 @@ Dettagli completi, tabella scenario/esito, e il secondo comportamento trovato e 
 volutamente non corretto (status 200 invece di 404 su `notFound()`, non bloccante): vedi
 `docs/test/E2E-ACCESSI.md`.
 
-### Fase 2 — Preparazione produzione (codice) — 🔄 in corso
+### Fase 2 — Preparazione produzione (codice) — ✅ completata (2026-10-02)
 
 Lavoro di solo codice, nessuna azione richiesta all'utente. Checklist:
 
@@ -43,8 +43,8 @@ Lavoro di solo codice, nessuna azione richiesta all'utente. Checklist:
 - [ ] ~~Sentry~~ **rimandato** — vedi nota sotto
 - [x] GitHub Action di backup: `pg_dump` notturno del DB di produzione su bucket R2 dedicato,
       conservazione 30 giorni, script di ripristino documentato (`docs/BACKUP.md`)
-- [ ] `npm run check` e `npm run build` verdi
-- [ ] PR dedicata, merge su main
+- [x] `npm run check` e `npm run build` verdi
+- [x] PR dedicata, merge su main — PR #16, commit `c407d6c`
 
 **Sentry rimandato.** Motivo: `@sentry/nextjs@11.3.0` (l'unica versione che dichiara supporto a
 Next 16) ha un bug aperto e non risolto con Turbopack — [sentry-javascript#19367](https://github.com/getsentry/sentry-javascript/issues/19367):
@@ -58,7 +58,7 @@ pubblica un fix per questo issue (nessuna modifica lasciata nel repo: pacchetto 
 
 (Il dettaglio di ogni punto si aggiorna qui sotto mano a mano che si completa.)
 
-### Fase 3 — Infrastruttura — ⏳ non iniziata (richiede l'utente)
+### Fase 3 — Infrastruttura — ⏳ pronta a iniziare (richiede l'utente)
 
 Si procede un servizio alla volta, fermandosi a ogni passo che richiede un'azione fisica (creare
 account, login CLI, incollare un valore). Elenco completo di cosa serve, prima di iniziare:
