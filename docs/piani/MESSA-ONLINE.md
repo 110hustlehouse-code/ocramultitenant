@@ -36,14 +36,25 @@ volutamente non corretto (status 200 invece di 404 su `notFound()`, non bloccant
 
 Lavoro di solo codice, nessuna azione richiesta all'utente. Checklist:
 
-- [ ] Seed di produzione separato dal seed di sviluppo: solo tenant Fulcro (società, listino,
-      139 clienti, 450 fornitori reali), nessun tenant demo, nessun utente `@ocra.local`
-- [ ] Verifica che `dev-login` sia irraggiungibile con `NODE_ENV=production`
-- [ ] Sentry (piano gratuito) per errori lato server e client
+- [x] Seed di produzione separato dal seed di sviluppo: solo tenant Fulcro (società, listino),
+      nessun tenant demo, nessun utente `@ocra.local` — clienti/fornitori reali restano a
+      `scripts/import-anagrafiche-reali.ts` (già esistente, richiede i file locali dell'utente)
+- [x] Verifica che `dev-login` sia irraggiungibile con `NODE_ENV=production`
+- [ ] ~~Sentry~~ **rimandato** — vedi nota sotto
 - [ ] GitHub Action di backup: `pg_dump` notturno del DB di produzione su bucket R2 dedicato,
       conservazione 30 giorni, script di ripristino documentato
 - [ ] `npm run check` e `npm run build` verdi
 - [ ] PR dedicata, merge su main
+
+**Sentry rimandato.** Motivo: `@sentry/nextjs@11.3.0` (l'unica versione che dichiara supporto a
+Next 16) ha un bug aperto e non risolto con Turbopack — [sentry-javascript#19367](https://github.com/getsentry/sentry-javascript/issues/19367):
+`@opentelemetry/api` duplicato tra i chunk Turbopack causa una ricorsione infinita e un crash
+fatale (`RangeError: Maximum call stack size exceeded`) in produzione, entro minuti o ore. Le
+configurazioni documentate (`tracesSampleRate: 0`, `skipOpenTelemetrySetup: true`) non lo
+risolvono. L'unico fix noto è tornare a `@sentry/nextjs@10.8.0`, che non supporta Next 16.
+Non bloccante per il collaudo: per ora bastano i log di Vercel. Da riprendere quando Sentry
+pubblica un fix per questo issue (nessuna modifica lasciata nel repo: pacchetto disinstallato,
+`package.json`/lockfile tornati puliti).
 
 (Il dettaglio di ogni punto si aggiorna qui sotto mano a mano che si completa.)
 
@@ -66,3 +77,18 @@ un'azione fisica (creare account, login CLI, incollare un valore).
 - PR #15: fix conflitto peer-dep nodemailer/next-auth, `@playwright/test`, suite E2E 8 scenari,
   fix redirect cambio password. Mergeata su main (squash), commit `a576095`.
 - `npm run check`: 230/230 test. `npm run build`: 36 route, invariate.
+
+### 2026-10-02 — Fase 2, seed produzione + dev-login + Sentry
+
+- `prisma/seed.ts` diviso in `seedMasiniCore()` (tenant/società/listino reali, riusabile) e
+  `seedMasiniDevUsers()` (utenti `@ocra.local`, solo sviluppo). Nuovo `prisma/seed-production.ts`
+  (`npm run db:seed:prod`) chiama solo la prima. Verificato idempotente, non tocca utenti/demo
+  esistenti.
+- Nuovo `scripts/create-ceo.ts <email> "<nome>"`: crea il primo utente CEO di produzione
+  (nessuna password, login via Google). Da usare in Fase 4.
+- `dev-login`: già coperto da `isDevLoginEnabled()` + test unitari esistenti
+  (`src/env.test.ts`) — disabilitato sia con `NODE_ENV=production` sia, rete di sicurezza
+  aggiuntiva, su qualunque host Vercel indipendentemente da come sono le altre variabili.
+  Nessuna modifica necessaria.
+- Sentry: installato, poi disinstallato per il bug Turbopack/Next 16 descritto sopra. Repo
+  tornato pulito (`package.json`/lockfile invariati rispetto al commit precedente).
