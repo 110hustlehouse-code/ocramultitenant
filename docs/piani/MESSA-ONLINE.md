@@ -12,7 +12,8 @@ a compattazioni e riavvii — è la fonte di verità sullo stato di avanzamento,
 
 ## Decisioni di infrastruttura (prese dall'utente, non rinegoziare)
 
-- Postgres: **Neon**, regione EU (Frankfurt)
+- Postgres: **Supabase**, regione Central EU (Frankfurt) — *cambiato da Neon il 2026-10-02,
+  progetto Supabase già creato dall'utente*
 - Vercel: progetto nuovo per `ocramultitenant`, regione funzioni **fra1**
 - R2 (Cloudflare): bucket documenti di produzione + bucket backup separato, giurisdizione EU
 - Dominio: **app.ocrapigmento.com** per la piattaforma (`ocrapigmento.com` resta libero per una
@@ -67,7 +68,8 @@ account, login CLI, incollare un valore). Elenco completo di cosa serve, prima d
 
 | Variabile | Da dove viene | Note |
 |---|---|---|
-| `DATABASE_URL` | Neon (connection string, pooled) | regione EU Frankfurt |
+| `DATABASE_URL` | Supabase → Connect → **Transaction pooler**, porta 6543 | usata a runtime dall'app (`@prisma/adapter-pg`) |
+| `DIRECT_URL` | Supabase → Connect → **Direct connection**, porta 5432 | solo per le migrazioni (`prisma.config.ts`) — il pooler in transaction mode non supporta il DDL delle migrazioni |
 | `AUTH_SECRET` | generata (`openssl rand -base64 32`) | obbligatoria in produzione |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google Cloud Console → OAuth client | redirect URI: `https://app.ocrapigmento.com/api/auth/callback/google` |
 | `AUTH_DEV_LOGIN` | — | **non impostarla affatto** (o `false`) in produzione |
@@ -82,7 +84,7 @@ account, login CLI, incollare un valore). Elenco completo di cosa serve, prima d
 
 | Nome | Tipo | Cos'è |
 |---|---|---|
-| `PROD_DATABASE_URL` | secret | connection string Neon di produzione |
+| `PROD_DATABASE_URL` | secret | connection string Supabase di produzione, **connessione diretta** (porta 5432), non il pooler |
 | `R2_BACKUP_ACCOUNT_ID` | secret | account Cloudflare (probabilmente uguale a `R2_ACCOUNT_ID`) |
 | `R2_BACKUP_ACCESS_KEY_ID` / `R2_BACKUP_SECRET_ACCESS_KEY` | secret | credenziali scoped **solo** al bucket di backup |
 | `R2_BACKUP_BUCKET` | secret | bucket R2 **backup**, separato da quello documenti |
@@ -95,7 +97,8 @@ transazionale (Resend, Postmark, SES...) con relay SMTP — da decidere insieme 
 a questo punto, è l'unica cosa infrastrutturale non già scelta in partenza.
 
 **Account/servizi da creare o configurare** (azioni fisiche, una alla volta quando si arriva lì):
-1. Progetto Neon (EU Frankfurt) + database
+1. ~~Progetto Neon~~ → **Progetto Supabase già creato** (Central EU, Frankfurt) — resta da
+   prendere le due connection string (pooler + diretta) da Connect e metterle su Vercel
 2. Progetto Vercel nuovo, collegato al repo, regione funzioni `fra1`
 3. Due bucket Cloudflare R2 (documenti + backup), giurisdizione EU, con due coppie di
    credenziali scoped separate
@@ -106,6 +109,19 @@ a questo punto, è l'unica cosa infrastrutturale non già scelta in partenza.
 7. I 6 secret + 1 variabile GitHub Actions per il backup
 
 ### Fase 4 — Deploy e verifica — ⏳ non iniziata
+
+- [ ] Migrazioni su Supabase (`npm run db:deploy` con `DIRECT_URL` di produzione), poi
+      `npm run db:seed:prod`
+- [ ] `scripts/import-anagrafiche-reali.ts` con i file reali dell'utente, contro il DB di
+      produzione
+- [ ] `scripts/create-ceo.ts <email> "<nome>"` per il primo utente CEO
+- [ ] Deploy su Vercel, dominio `app.ocrapigmento.com` collegato, HTTPS attivo
+- [ ] Smoke test in produzione: login Google, login password, creazione collaboratore,
+      generazione preventivo e PDF, upload documento su R2, invio email di reset reale
+- [ ] Prova di ripristino: backup reale, ripristino su un **progetto/database Supabase di
+      test separato** (niente branching come in Neon — vedi `docs/BACKUP.md`), verifica dati,
+      poi eliminazione del progetto di test
+- [ ] Rilancio completo della suite E2E (8 scenari) a fine fase, come verifica finale
 
 ### Fase 5 — Riepilogo — ⏳ non iniziata
 
@@ -139,3 +155,35 @@ a questo punto, è l'unica cosa infrastrutturale non già scelta in partenza.
   ci sono). `scripts/restore-backup.sh` per il ripristino, con conferma esplicita.
   Documentato in `docs/BACKUP.md`. Elenco completo variabili/account per la Fase 3 compilato
   qui sopra.
+
+### 2026-10-02 — Cambio Postgres: Neon → Supabase
+
+Decisione dell'utente: Supabase invece di Neon, stessa regione (Central EU, Frankfurt),
+progetto già creato. Serve una connessione diretta separata dal pooler per le migrazioni
+(il pooler Supavisor di Supabase, come PgBouncer, è in transaction mode: non supporta il
+DDL delle migrazioni né i lock di avviso che usa).
+
+**Scoperto facendo la prova in locale** (non si può indovinare con Prisma 7, è cambiato):
+`url`/`directUrl` nello `schema.prisma` **non sono più supportati** — Prisma 7 li rifiuta
+con errore (`P1012`, vedi https://pris.ly/d/config-datasource). Tutto il routing delle
+connessioni per i comandi CLI passa da `prisma.config.ts`, che però ha un solo slot
+`datasource.url` (nessun `directUrl` nel tipo `Datasource`).
+
+Soluzione verificata (generate, check, deploy, seed, build — tutti testati in locale):
+- `prisma.config.ts`: `datasource.url` ora legge `DIRECT_URL`, non più `DATABASE_URL` — i
+  comandi CLI (migrate, `db:check`) usano sempre la connessione diretta.
+- `src/server/db/client.ts` (runtime dell'app) resta invariato: legge `DATABASE_URL` (il
+  pooler) direttamente da `env()`, indipendente da `prisma.config.ts`.
+- `schema.prisma`: tornato a `datasource db { provider = "postgresql" }`, nient'altro.
+- `@prisma/adapter-pg` non passa mai un nome al prepared statement (verificato nel sorgente
+  installato, `pgOptions?.statementNameGenerator` è l'unica fonte del nome ed è sempre
+  `undefined` qui) → compatibile col pooler in transaction mode senza bisogno di
+  `?pgbouncer=true` in query string (quel parametro serve solo al query engine Rust, non
+  usato in questo progetto).
+- `.env.example`, `.env` locale, CI (`ci.yml`): aggiunta `DIRECT_URL`, uguale a
+  `DATABASE_URL` dove non c'è un pooler (locale, CI).
+- `docs/BACKUP.md`, `scripts/restore-backup.sh`: `PROD_DATABASE_URL`/`TARGET_DATABASE_URL`
+  devono essere la connessione **diretta** (`pg_dump`/`pg_restore` non sono affidabili
+  attraverso un pooler in transaction mode); "branch Neon" → "progetto/database Supabase di
+  test separato" (Supabase non ha il branching di Neon).
+- `npm run check` e `npm run build`: verdi.
