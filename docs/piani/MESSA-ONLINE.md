@@ -16,8 +16,11 @@ a compattazioni e riavvii — è la fonte di verità sullo stato di avanzamento,
   progetto Supabase già creato dall'utente*
 - Vercel: progetto nuovo per `ocramultitenant`, regione funzioni **fra1**
 - R2 (Cloudflare): bucket documenti di produzione + bucket backup separato, giurisdizione EU
-- Dominio: **app.ocrapigmento.com** per la piattaforma (`ocrapigmento.com` resta libero per una
-  futura landing page)
+- Struttura domini (decisa il 2026-10-02): **www.ocrapigmento.com** è il sito di presentazione,
+  già online — non toccare i suoi record DNS. **app.ocrapigmento.com** è questo progetto
+  (produzione multi-tenant). **demo.ocrapigmento.com** sarà un'istanza demo separata (progetto
+  Vercel a parte, database Supabase a parte, seed demo, reset dati notturno) — **fase
+  successiva alla messa online, non ora**.
 - Email transazionali (reset password, inviti): mittente **noreply@ocrapigmento.com**, con SPF,
   DKIM e DMARC configurati
 
@@ -69,7 +72,7 @@ account, login CLI, incollare un valore). Elenco completo di cosa serve, prima d
 | Variabile | Da dove viene | Note |
 |---|---|---|
 | `DATABASE_URL` | Supabase → Connect → **Transaction pooler**, porta 6543 | usata a runtime dall'app (`@prisma/adapter-pg`) |
-| `DIRECT_URL` | Supabase → Connect → **Direct connection**, porta 5432 | solo per le migrazioni (`prisma.config.ts`) — il pooler in transaction mode non supporta il DDL delle migrazioni |
+| `DIRECT_URL` | Supabase → Connect → **Session pooler**, porta 5432 | solo per le migrazioni (`prisma.config.ts`). *Non* la vera Direct connection: sul piano free è solo IPv6, incompatibile con Vercel/Codespaces (IPv4). Il Session pooler, a differenza del Transaction pooler, tiene una connessione dedicata per sessione: supporta DDL e lock di avviso come una connessione diretta |
 | `AUTH_SECRET` | generata (`openssl rand -base64 32`) | obbligatoria in produzione |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google Cloud Console → OAuth client | redirect URI: `https://app.ocrapigmento.com/api/auth/callback/google` |
 | `AUTH_DEV_LOGIN` | — | **non impostarla affatto** (o `false`) in produzione |
@@ -84,7 +87,7 @@ account, login CLI, incollare un valore). Elenco completo di cosa serve, prima d
 
 | Nome | Tipo | Cos'è |
 |---|---|---|
-| `PROD_DATABASE_URL` | secret | connection string Supabase di produzione, **connessione diretta** (porta 5432), non il pooler |
+| `PROD_DATABASE_URL` | secret | connection string Supabase di produzione, **Session pooler** (porta 5432) — stesso motivo IPv4 di `DIRECT_URL`, `pg_dump` ha bisogno di una sessione stabile che il Transaction pooler non garantisce |
 | `R2_BACKUP_ACCOUNT_ID` | secret | account Cloudflare (probabilmente uguale a `R2_ACCOUNT_ID`) |
 | `R2_BACKUP_ACCESS_KEY_ID` / `R2_BACKUP_SECRET_ACCESS_KEY` | secret | credenziali scoped **solo** al bucket di backup |
 | `R2_BACKUP_BUCKET` | secret | bucket R2 **backup**, separato da quello documenti |
@@ -97,16 +100,21 @@ transazionale (Resend, Postmark, SES...) con relay SMTP — da decidere insieme 
 a questo punto, è l'unica cosa infrastrutturale non già scelta in partenza.
 
 **Account/servizi da creare o configurare** (azioni fisiche, una alla volta quando si arriva lì):
-1. ~~Progetto Neon~~ → **Progetto Supabase già creato** (Central EU, Frankfurt) — resta da
-   prendere le due connection string (pooler + diretta) da Connect e metterle su Vercel
-2. Progetto Vercel nuovo, collegato al repo, regione funzioni `fra1`
-3. Due bucket Cloudflare R2 (documenti + backup), giurisdizione EU, con due coppie di
-   credenziali scoped separate
-4. Dominio `app.ocrapigmento.com`: record DNS verso Vercel (CNAME/A forniti da Vercel dopo aver
-   aggiunto il dominio al progetto)
-5. Google Cloud OAuth client per `AUTH_GOOGLE_ID`/`SECRET`
-6. Provider email per `noreply@ocrapigmento.com` (decisione da prendere al momento, vedi nota sopra)
-7. I 6 secret + 1 variabile GitHub Actions per il backup
+1. ✅ Progetto Supabase (Central EU, Frankfurt)
+2. ✅ Progetto Vercel `ocramultitenant` (org `ocra`), collegato al repo, regione funzioni `fra1`.
+   `DATABASE_URL`/`DIRECT_URL` di produzione inserite come **Secret** (non scaricabili con
+   `vercel env pull` — quando servono dal terminale, l'utente le esporta lui nella shell)
+3. ⏳ Due bucket Cloudflare R2 (documenti + backup), giurisdizione EU, con due coppie di
+   credenziali scoped separate — **passo attuale**
+4. ✅ DNS `ocrapigmento.com` su Cloudflare, verificato. `www` già online (non toccare).
+   Resta da collegare `app.ocrapigmento.com` al progetto Vercel (record forniti da Vercel
+   dopo aver aggiunto il dominio lì) senza modificare i record di `www`
+5. ⏳ Google Cloud OAuth client per `AUTH_GOOGLE_ID`/`SECRET`
+6. ⏳ Provider email per `noreply@ocrapigmento.com` (decisione da prendere al momento, vedi nota sopra)
+7. ⏳ I 6 secret + 1 variabile GitHub Actions per il backup
+
+**Promemoria per dopo la messa online**: `demo.ocrapigmento.com`, istanza demo separata
+(Vercel + Supabase a parte, seed demo, reset notturno) — non ora.
 
 ### Fase 4 — Deploy e verifica — ⏳ non iniziata
 
@@ -187,3 +195,20 @@ Soluzione verificata (generate, check, deploy, seed, build — tutti testati in 
   attraverso un pooler in transaction mode); "branch Neon" → "progetto/database Supabase di
   test separato" (Supabase non ha il branching di Neon).
 - `npm run check` e `npm run build`: verdi.
+
+### 2026-10-02 — Fase 3: Vercel collegato, DNS attivo, Session pooler per le migrazioni
+
+- Progetto Vercel `ocramultitenant` (org `ocra`) creato e collegato, regione `fra1`.
+  `DATABASE_URL`/`DIRECT_URL` di produzione inserite come Secret su Vercel.
+- **Scelta dell'utente**: `DIRECT_URL` usa il **Session pooler** di Supabase (porta 5432), non
+  la vera Direct connection — sul piano free quest'ultima è solo IPv6, incompatibile con
+  Vercel/Codespaces (IPv4). Il Session pooler tiene una connessione dedicata per l'intera
+  sessione (a differenza del Transaction pooler, che la ricicla tra una transazione e
+  l'altra): supporta DDL e lock di avviso come una connessione diretta, quindi va bene per
+  `prisma migrate` allo stesso modo. Lo stesso vale per `PROD_DATABASE_URL` del backup
+  (`pg_dump` ha bisogno della stessa stabilità di sessione). Aggiornata la documentazione
+  sopra e in `docs/BACKUP.md`/`scripts/restore-backup.sh` di conseguenza (nessun cambio di
+  codice: è solo quale stringa di connessione viene usata in produzione).
+- DNS `ocrapigmento.com` attivo su Cloudflare, verificato. Struttura domini decisa:
+  `www` (sito esistente, non toccare), `app` (questo progetto), `demo` (fase successiva).
+- Prossimo passo: bucket R2 (documenti + backup).

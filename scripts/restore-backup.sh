@@ -4,8 +4,8 @@
 # Pensato per la prova di ripristino periodica (Fase 4 del piano) e per un disaster
 # recovery vero: la destinazione dovrebbe essere quasi sempre un progetto/database
 # Supabase di test separato da quello di produzione, mai produzione stessa, a meno di
-# sapere esattamente cosa si sta facendo. Usa la connessione DIRETTA (porta 5432), non
-# il pooler: pg_restore non è affidabile attraverso un pooler in transaction mode.
+# sapere esattamente cosa si sta facendo. Usa una connessione DIRETTA o il SESSION POOLER
+# (porta 5432), non il Transaction pooler: pg_restore ha bisogno di una sessione stabile.
 #
 # Uso:
 #   R2_BACKUP_ACCOUNT_ID=... R2_BACKUP_ACCESS_KEY_ID=... R2_BACKUP_SECRET_ACCESS_KEY=... \

@@ -24,7 +24,7 @@ segreti sotto non sono configurati, resta spento invece di fallire ogni notte.
 
 | Secret | Cos'è |
 |---|---|
-| `PROD_DATABASE_URL` | Connection string Postgres di produzione (Supabase), **connessione diretta, porta 5432** — non il pooler: `pg_dump` non è affidabile attraverso un pooler in transaction mode |
+| `PROD_DATABASE_URL` | Connection string Postgres di produzione (Supabase), **Session pooler, porta 5432** — non il Transaction pooler: `pg_dump` ha bisogno di una sessione stabile, che solo una connessione diretta o il Session pooler garantiscono. (Sul piano free la vera Direct connection è solo IPv6: il Session pooler è l'alternativa IPv4) |
 | `R2_BACKUP_ACCOUNT_ID` | Account ID Cloudflare (lo stesso del bucket documenti, probabilmente) |
 | `R2_BACKUP_ACCESS_KEY_ID` | Chiave di accesso **scoped solo al bucket di backup** — non quello documenti |
 | `R2_BACKUP_SECRET_ACCESS_KEY` | Segreto della chiave sopra |
@@ -51,8 +51,8 @@ R2_BACKUP_BUCKET=... TARGET_DATABASE_URL=postgres://... \
 da produzione**, mai produzione stessa, a meno di un vero disaster recovery. Supabase non
 ha il branching di database di Neon: per una prova di ripristino si crea un progetto
 Supabase a parte (anche solo per la durata della prova), ci si ripristina sopra, si
-verificano i dati, poi lo si elimina. Usare sempre la connessione diretta (porta 5432) come
-`TARGET_DATABASE_URL`, mai il pooler.
+verificano i dati, poi lo si elimina. Usare sempre una connessione diretta o il Session
+pooler (porta 5432) come `TARGET_DATABASE_URL`, mai il Transaction pooler.
 
 Richiede in locale: `aws` CLI e `pg_restore` (stessa major version di Postgres di
 produzione, o più recente).
