@@ -104,14 +104,22 @@ a questo punto, è l'unica cosa infrastrutturale non già scelta in partenza.
 2. ✅ Progetto Vercel `ocramultitenant` (org `ocra`), collegato al repo, regione funzioni `fra1`.
    `DATABASE_URL`/`DIRECT_URL` di produzione inserite come **Secret** (non scaricabili con
    `vercel env pull` — quando servono dal terminale, l'utente le esporta lui nella shell)
-3. ⏳ Due bucket Cloudflare R2 (documenti + backup), giurisdizione EU, con due coppie di
-   credenziali scoped separate — **passo attuale**
+3. ✅ Due bucket Cloudflare R2 (`ocra-documenti` + `ocra-backup`), giurisdizione EU, con due
+   token scoped separati (uno per bucket, Object Read & Write). Trovato e corretto un bug: i
+   bucket EU richiedono l'endpoint `https://<ACCOUNT_ID>.eu.r2.cloudflarestorage.com` (col
+   segmento `.eu.`) — l'app e gli script lo usavano senza, Cloudflare avrebbe rifiutato le
+   richieste. Resta da inserire le variabili su Vercel/GitHub — **passo attuale**
 4. ✅ DNS `ocrapigmento.com` su Cloudflare, verificato. `www` già online (non toccare).
    Resta da collegare `app.ocrapigmento.com` al progetto Vercel (record forniti da Vercel
    dopo aver aggiunto il dominio lì) senza modificare i record di `www`
 5. ⏳ Google Cloud OAuth client per `AUTH_GOOGLE_ID`/`SECRET`
 6. ⏳ Provider email per `noreply@ocrapigmento.com` (decisione da prendere al momento, vedi nota sopra)
 7. ⏳ I 6 secret + 1 variabile GitHub Actions per il backup
+8. ⚠️ **Da sistemare prima del deploy vero**: `AUTH_SECRET` (e in generale le variabili
+   Vercel) sembrano impostate solo per l'ambiente Production — i deployment di Preview
+   (ogni PR ne genera uno) falliscono in build con "AUTH_SECRET è obbligatoria in
+   produzione", perché Vercel imposta `NODE_ENV=production` anche lì. Da estendere a
+   Preview (e Development se si userà) quando si arriva al deploy, non bloccante per ora.
 
 **Promemoria per dopo la messa online**: `demo.ocrapigmento.com`, istanza demo separata
 (Vercel + Supabase a parte, seed demo, reset notturno) — non ora.
@@ -211,4 +219,18 @@ Soluzione verificata (generate, check, deploy, seed, build — tutti testati in 
   codice: è solo quale stringa di connessione viene usata in produzione).
 - DNS `ocrapigmento.com` attivo su Cloudflare, verificato. Struttura domini decisa:
   `www` (sito esistente, non toccare), `app` (questo progetto), `demo` (fase successiva).
-- Prossimo passo: bucket R2 (documenti + backup).
+- Trovata (dall'utente) una build Vercel Preview fallita per `AUTH_SECRET` mancante — non
+  legata a questo lavoro, ma alle variabili impostate solo per l'ambiente Production. Non
+  bloccante, segnato in checklist, da sistemare prima del deploy vero.
+
+### 2026-10-02 — Bucket R2 creati, bug endpoint EU trovato e corretto
+
+- Bucket `ocra-documenti` e `ocra-backup` creati su Cloudflare R2, giurisdizione EU, con due
+  token scoped separati.
+- **Trovato dall'utente**: un bucket R2 con giurisdizione EU richiede l'endpoint
+  `https://<ACCOUNT_ID>.eu.r2.cloudflarestorage.com` (col segmento `.eu.`) — il codice e gli
+  script usavano `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` (senza), che Cloudflare
+  avrebbe rifiutato. Corretto in `src/server/integrations/storage.ts` (app),
+  `.github/workflows/backup.yml` e `scripts/restore-backup.sh` (entrambi i passi R2).
+  `npm run check`/`npm run build` verdi dopo la correzione.
+- Prossimo passo: inserire le variabili Vercel (app) e i secret GitHub Actions (backup).
