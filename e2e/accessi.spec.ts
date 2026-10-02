@@ -36,11 +36,10 @@ async function loginWithPassword(page: Page, email: string, password: string) {
   await page.click('button:has-text("Accedi con email e password")');
   // Il submit passa da una Server Action: il redirect che segue (successo o errore) è
   // gestito dal router client-side di Next, non da una navigazione piena — aspetta che
-  // l'URL cambi rispetto a quella di partenza, qualunque sia l'esito.
-  // ATTENZIONE (vedi scenario 2 e il report): in caso di successo con mustChangePassword=true
-  // questo redirect interno NON passa dal proxy, quindi l'utente atterra per un istante sulla
-  // destinazione originale (es. "/") prima di qualunque nuova richiesta piena (page.goto,
-  // reload, link cliccato) che invece il proxy la intercetta correttamente.
+  // l'URL cambi rispetto a quella di partenza, qualunque sia l'esito. La Server Action
+  // (src/server/auth/actions.ts) rilegge l'utente dal DB e decide essa stessa la
+  // destinazione finale (/password/nuova se mustChangePassword, altrimenti il target),
+  // quindi qui si atterra già sulla destinazione corretta.
   await page.waitForURL((url) => url.toString() !== before, { timeout: 10_000 });
 }
 
@@ -106,16 +105,15 @@ test.describe("2-3. primo login forzato e visibilità dopo il cambio", () => {
 
   test("2. login forza il cambio password, nessun'altra pagina è raggiungibile", async ({ page }) => {
     await loginWithPassword(page, email, tempPassword);
-    // TROVATO (vedi commento su loginWithPassword e il report finale): il redirect interno
-    // della Server Action di login non passa dal proxy, quindi qui l'URL è ancora quella di
-    // destinazione originale ("/"), non "/password/nuova" — un istante in cui la pagina non
-    // forza il cambio password. Lo documentiamo invece di far fallire il test su un'aspettativa
-    // che il codice attuale non rispetta davvero.
-    const landedOnChangePassword = page.url().includes("/password/nuova");
-    console.log(`[scenario 2] redirect immediato a /password/nuova dopo il login: ${landedOnChangePassword}`);
+    // Il redirect è immediato e diretto a /password/nuova: nessuna pagina protetta
+    // viene mai renderizzata con dati reali nel frattempo (fix su src/server/auth/actions.ts).
+    await expect(page).toHaveURL(/\/password\/nuova/);
+    await expect(page.getByText("Imposta una nuova password")).toBeVisible();
+    await expect(page.getByText("Ciao")).toHaveCount(0);
 
-    // Prova diretta a un'altra pagina (richiesta piena, es. URL scritto a mano): qui il proxy
-    // intercetta correttamente e forza il cambio password.
+    // Prova diretta a un'altra pagina (richiesta piena, es. URL scritto a mano): il proxy
+    // intercetta correttamente e forza il cambio password; il backstop in getContext()
+    // copre anche qualunque pagina che per qualche motivo sfuggisse al proxy.
     await page.goto("/progetti");
     await expect(page).toHaveURL(/\/password\/nuova/);
     await page.goto("/impostazioni/utenti");

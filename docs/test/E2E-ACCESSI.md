@@ -42,7 +42,7 @@ a fine suite (`test.afterAll` → cascade su `Tenant`). Nessun dato di test rest
 | # | Scenario | Esito | Note |
 |---|----------|-------|------|
 | 1 | Password iniziale mostrata una volta sola | ✅ Passato | Confermato anche dopo reload della pagina. |
-| 2 | Login forza il cambio password | ✅ Passato | Vedi **Trovato 1** sotto: il redirect subito dopo il login è gestito dal router client-side e non passa dal proxy — l'enforcement è garantito solo sulle richieste piene (URL diretto, reload), non nell'istante del redirect interno. |
+| 2 | Login forza il cambio password | ✅ Passato | Vedi **Corretto 1** sotto: il redirect a `/password/nuova` ora è immediato e diretto, nessuna pagina protetta renderizza mai contenuto nel frattempo. |
 | 3 | Dopo il cambio: visibilità limitata | ✅ Passato | Vedi **Trovato 2** sotto: `/margine`, `/collaboratori`, `/impostazioni/utenti` restituiscono sempre status 200 invece di 404, pur mostrando correttamente il contenuto "Pagina non disponibile" — nessun dato trapela. |
 | 4 | Blocco dopo 5+ tentativi falliti | ✅ Passato | Lo sblocco allo scadere è stato simulato spostando `lockedUntil` nel passato (i 15 minuti reali non sono stati attesi). |
 | 5 | Reset password monouso | ✅ Passato | Il token reale non è leggibile dal DB (solo l'hash SHA-256 è salvato): per il link vero si è intercettato l'invio chiamando `requestPasswordReset` con un sender fittizio (stessa tecnica del test unitario già in repo), non la vera casella email. |
@@ -50,26 +50,35 @@ a fine suite (`test.afterAll` → cascade su `Tenant`). Nessun dato di test rest
 | 7 | Accesso scaduto nega il login | ✅ Passato | — |
 | 8 | Provider Google configurato | ✅ Passato | In questo ambiente `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` sono vuoti (placeholder): la pagina mostra correttamente "Google non configurato" invece del bottone. Il test verifica che la pagina rifletta la configurazione corrente, qualunque sia; con credenziali reali comparirebbe "Accedi con Google". Il login OAuth vero resta da verificare a mano. |
 
-### Trovato 1 — redirect post-login non passa dal proxy (non corretto, solo segnalato)
+### Corretto 1 — redirect post-login ora passa dalla stessa Server Action
 
-Dopo un login riuscito con `mustChangePassword: true`, la Server Action (`signInWithPassword`)
-fa `redirect()` lato server verso la pagina di destinazione originale (es. `/`). Quel redirect è
-gestito dal **router client-side** di Next (fetch interno + `router.replace`), che **non passa
-dal proxy** (`src/proxy.ts`): per un istante l'utente atterra sulla pagina di destinazione
-originale invece che su `/password/nuova`, perché il controllo `mustChangePassword` vive solo
-nel proxy (ottimistico) — `getContext()` non lo verifica mai lato server/pagina.
+Prima della correzione: dopo un login riuscito con `mustChangePassword: true`, la Server Action
+(`signInWithPassword`) lasciava che `signIn()` facesse `redirect()` da sé verso la pagina di
+destinazione originale (es. `/`). Quel redirect era gestito dal router client-side di Next (fetch
+interno della Server Action), che non passa dal proxy: per un istante l'URL restava sulla
+destinazione originale. Verificato che il *contenuto* mostrato era comunque corretto (il modulo
+di cambio password, non la pagina richiesta) — il router client-side aveva già applicato
+l'eventuale redirect del proxy al contenuto, solo l'indirizzo visibile non si aggiornava di
+conseguenza — ma l'indirizzo sbagliato era comunque un comportamento scorretto da correggere.
 
-Una richiesta piena immediatamente successiva (URL scritto a mano, reload, click su un link che
-causa una navigazione piena) **viene correttamente ributtata su `/password/nuova`** — verificato.
-Non è stato verificato se una normale navigazione client-side (`<Link>`) dalla pagina di
-destinazione erediti lo stesso gap, perché è emerso solo investigando il redirect interno della
-Server Action.
+Fix applicato in `src/server/auth/actions.ts`: le Credentials (`password-login`, `dev-login`)
+chiamano ora `signIn(..., { redirect: false })` e la Server Action stessa rilegge l'utente dal
+DB (`resolveLoginUser`, la stessa funzione del provider — non la sessione appena scritta, che un
+`auth()` nella stessa invocazione non vede ancora) per decidere la destinazione reale: diretta a
+`/password/nuova` se `mustChangePassword`, altrimenti quella originale. Google (OAuth) non è
+toccato: la sua autenticazione si completa in modo asincrono dopo il round-trip col provider
+esterno, il controllo non si applica a quel punto.
 
-Impatto pratico da valutare: dipende da cosa espone la pagina di destinazione (spesso `/`, la
-panoramica) in quell'istante. Nessuna verifica è stata fatta su quanto sia o meno sensibile quel
-contenuto per un utente con password ancora da cambiare.
+Aggiunto anche un backstop in `getContext()` (`src/server/context.ts`): rilegge l'utente dal DB
+a ogni richiesta e reindirizza a `/password/nuova` se `mustChangePassword` è vero, indipendente
+dal proxy — nessuna pagina che passa da `getContext()` può più renderizzare contenuto per un
+utente che deve ancora cambiare la password assegnata dal CEO, qualunque sia il percorso con cui
+ci è arrivato.
 
-### Trovato 2 — `notFound()` restituisce status 200 invece di 404 (non corretto, solo segnalato)
+Lo scenario 2 ora verifica l'URL immediato (`/password/nuova`), il contenuto corretto, e
+l'assenza di contenuto della panoramica ("Ciao").
+
+### Trovato 2 — `notFound()` restituisce status 200 invece di 404 (non corretto, solo documentato su richiesta)
 
 Le pagine che chiamano `notFound()` per un permesso mancante (es. `/margine`,
 `/collaboratori`, `/impostazioni/utenti` per un ruolo Esterno) mostrano correttamente il
@@ -83,3 +92,5 @@ prima che il segmento della pagina, più in profondità nell'albero, lanci `notF
 Impatto pratico: nessuna violazione di sicurezza (il contenuto è correttamente bloccato), ma
 qualunque cliente/strumento che si affidi allo status HTTP (non al contenuto) per sapere se una
 richiesta è autorizzata — monitoraggio, integrazioni, test automatici — vedrebbe un falso 200.
+
+**Decisione**: non corretto in questa PR, lasciato così — noto e non bloccante.

@@ -44,6 +44,11 @@ export const getContext = cache(async () => {
   if (!user) redirect("/login?error=AccessDenied");
   const access: CompanyAccess[] = user.memberships.map((m) => ({ company: m.company, role: m.role }));
   if (!hasValidAccess({ ...user, roles: access.map((a) => a.role) })) redirect("/login?error=AccessDenied");
+  // Backstop server-side: il proxy è ottimistico (legge solo il JWT) e non intercetta il
+  // redirect interno del router client-side subito dopo il login. Qui si rilegge dal DB a
+  // ogni richiesta, quindi nessuna pagina che passa da getContext() può renderizzare
+  // contenuto per un utente che deve ancora cambiare la password assegnata dal CEO.
+  if (user.mustChangePassword) redirect("/password/nuova");
 
   const blocks = await prisma.accountBlock.findMany({
     where: { tenantId: user.tenantId, userId: user.id, releasedAt: null },
