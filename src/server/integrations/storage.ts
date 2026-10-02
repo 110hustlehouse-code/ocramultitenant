@@ -16,7 +16,9 @@ function r2() {
   }
   client ??= new S3Client({
     region: "auto",
-    endpoint: `https://${e.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    // Bucket con giurisdizione EU: l'endpoint richiede il segmento ".eu." — altrimenti
+    // Cloudflare rifiuta le richieste (bucket creato con dati vincolati all'UE).
+    endpoint: `https://${e.R2_ACCOUNT_ID}.eu.r2.cloudflarestorage.com`,
     credentials: { accessKeyId: e.R2_ACCESS_KEY_ID, secretAccessKey: e.R2_SECRET_ACCESS_KEY },
   });
   return { client, bucket: e.R2_BUCKET };

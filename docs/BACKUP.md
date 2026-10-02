@@ -9,7 +9,8 @@ Workflow: `.github/workflows/backup.yml`.
 1. `pg_dump` gira dentro un container `postgres:17-alpine` (non installato sul runner:
    evita disallineamenti di versione con Supabase), formato custom (`-Fc`), già compresso.
 2. Il dump va su `s3://<R2_BACKUP_BUCKET>/ocra-backups/db-YYYY-MM-DD.dump` via AWS CLI
-   (R2 è compatibile S3; endpoint `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`).
+   (R2 è compatibile S3; endpoint `https://<ACCOUNT_ID>.eu.r2.cloudflarestorage.com` — il
+   segmento `.eu.` è richiesto per i bucket con giurisdizione EU).
 3. Un passo successivo elimina gli oggetti in `ocra-backups/` con `LastModified` oltre
    30 giorni fa.
 
