@@ -102,24 +102,44 @@ a questo punto, è l'unica cosa infrastrutturale non già scelta in partenza.
 **Account/servizi da creare o configurare** (azioni fisiche, una alla volta quando si arriva lì):
 1. ✅ Progetto Supabase (Central EU, Frankfurt)
 2. ✅ Progetto Vercel `ocramultitenant` (org `ocra`), collegato al repo, regione funzioni `fra1`.
-   `DATABASE_URL`/`DIRECT_URL` di produzione inserite come **Secret** (non scaricabili con
-   `vercel env pull` — quando servono dal terminale, l'utente le esporta lui nella shell)
+   12 variabili inserite in Production come Secret (vedi sotto). **Primo deploy di produzione
+   riuscito** (redeploy manuale dopo aver completato le variabili — i deploy automatici
+   precedenti erano falliti perché le variabili non erano ancora tutte presenti): online su
+   `https://ocramultitenant.vercel.app`
 3. ✅ Due bucket Cloudflare R2 (`ocra-documenti` + `ocra-backup`), giurisdizione EU, con due
-   token scoped separati (uno per bucket, Object Read & Write). Trovato e corretto un bug: i
-   bucket EU richiedono l'endpoint `https://<ACCOUNT_ID>.eu.r2.cloudflarestorage.com` (col
-   segmento `.eu.`) — l'app e gli script lo usavano senza, Cloudflare avrebbe rifiutato le
-   richieste. Resta da inserire le variabili su Vercel/GitHub — **passo attuale**
-4. ✅ DNS `ocrapigmento.com` su Cloudflare, verificato. `www` già online (non toccare).
-   Resta da collegare `app.ocrapigmento.com` al progetto Vercel (record forniti da Vercel
-   dopo aver aggiunto il dominio lì) senza modificare i record di `www`
-5. ⏳ Google Cloud OAuth client per `AUTH_GOOGLE_ID`/`SECRET`
-6. ⏳ Provider email per `noreply@ocrapigmento.com` (decisione da prendere al momento, vedi nota sopra)
-7. ⏳ I 6 secret + 1 variabile GitHub Actions per il backup
-8. ⚠️ **Da sistemare prima del deploy vero**: `AUTH_SECRET` (e in generale le variabili
-   Vercel) sembrano impostate solo per l'ambiente Production — i deployment di Preview
-   (ogni PR ne genera uno) falliscono in build con "AUTH_SECRET è obbligatoria in
-   produzione", perché Vercel imposta `NODE_ENV=production` anche lì. Da estendere a
-   Preview (e Development se si userà) quando si arriva al deploy, non bloccante per ora.
+   token scoped separati. Bug trovato e corretto: endpoint `.eu.r2.cloudflarestorage.com`
+   (vedi sopra). Variabili app inserite su Vercel; i secret GitHub del backup restano da
+   fare (vedi punto 7)
+4. 🔄 Dominio `app.ocrapigmento.com` aggiunto al progetto Vercel. **Record DNS da aggiungere
+   su Cloudflare** (solo questo, non tocca `www`): `A  app  76.76.21.21`, **DNS only** (non
+   proxato) — altrimenti Vercel non riesce a emettere il certificato TLS. DNS `ocrapigmento.com`
+   già verificato in Cloudflare in precedenza, `www` resta com'è
+5. ✅ Google Cloud OAuth: progetto dedicato **"ocrapigmento"**, client **"ocra-produzione"**,
+   redirect su `app.ocrapigmento.com`, app in modalità **Testing** (l'utente aggiunge a mano
+   gli utenti di test — nessuna pubblicazione pubblica del client OAuth per ora)
+6. ⏳ Provider email per `noreply@ocrapigmento.com` — **proposta sotto**
+7. ⏳ I 6 secret + 1 variabile GitHub Actions per il backup — `gh secret set` dà 403
+   (permessi del token CLI), l'utente li inserisce dal sito GitHub
+8. ⏳ `DEEPGRAM_API_KEY` (trascrizione audio, opzionale) — rimandato
+9. ⚠️ **Da sistemare prima di aprire il sito al pubblico**: le 12 variabili sono impostate
+   solo per l'ambiente Production — i deployment di Preview (ogni PR ne genera uno)
+   falliscono in build con "AUTH_SECRET è obbligatoria in produzione", perché Vercel imposta
+   `NODE_ENV=production` anche lì. Non blocca Production (che ora funziona), da estendere a
+   Preview quando si vorranno Preview funzionanti per le PR.
+
+**Proposta provider email — Resend.** Piano gratuito adatto (3.000 email/mese, 100/giorno —
+di più di quanto serva per reset password e inviti). Si collega con **zero modifiche al
+codice**: l'app invia già via SMTP generico (`nodemailer`, `src/server/notify/email.ts`), e
+Resend espone un relay SMTP compatibile — basta puntarci le variabili già esistenti:
+- `SMTP_HOST=smtp.resend.com`, `SMTP_PORT=465`, `SMTP_USER=resend` (letterale), `SMTP_PASS=`
+  la API key di Resend, `SMTP_FROM=noreply@ocrapigmento.com`
+- Resend chiede di verificare il dominio `ocrapigmento.com` con record DNS (SPF, DKIM, un
+  record di verifica) da aggiungere su Cloudflare — stesso tipo di passo già fatto per il
+  dominio Vercel, additivo, non tocca `www`
+Alternative valutate: Postmark (ottima deliverability, piano gratuito solo 100 email **totali**
+di prova, poi a pagamento) e SES (più economico su volumi alti, ma setup più macchinoso — serve
+uscire dal sandbox mode AWS con una richiesta). Per i volumi di questo progetto, Resend è il
+più semplice da collegare e il piano gratuito basta avanzare.
 
 **Promemoria per dopo la messa online**: `demo.ocrapigmento.com`, istanza demo separata
 (Vercel + Supabase a parte, seed demo, reset notturno) — non ora.
@@ -234,3 +254,22 @@ Soluzione verificata (generate, check, deploy, seed, build — tutti testati in 
   `.github/workflows/backup.yml` e `scripts/restore-backup.sh` (entrambi i passi R2).
   `npm run check`/`npm run build` verdi dopo la correzione.
 - Prossimo passo: inserire le variabili Vercel (app) e i secret GitHub Actions (backup).
+
+### 2026-10-02 — 12 variabili Vercel, primo deploy riuscito, dominio collegato
+
+- 12 variabili inserite in Production su Vercel: `DATABASE_URL`, `DIRECT_URL`, `AUTH_SECRET`,
+  `CRON_SECRET`, `APP_URL`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+  `R2_BUCKET`, `ANTHROPIC_API_KEY`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`. Verificato con
+  `vercel env ls production`: tutte presenti, scope Production, valori nascosti.
+- Google OAuth: progetto Google Cloud dedicato "ocrapigmento", client "ocra-produzione",
+  redirect su `app.ocrapigmento.com`, modalità Testing (utenti di test aggiunti a mano).
+- **Trovato**: tutti i deployment (Production e Preview) risultavano in errore
+  (`vercel ls`) — i deploy automatici erano partiti prima che tutte le 12 variabili fossero
+  presenti. Con `vercel redeploy` sull'ultimo deployment di produzione, ora che le variabili
+  ci sono tutte, il build è andato a buon fine: online su `https://ocramultitenant.vercel.app`.
+- Dominio `app.ocrapigmento.com` aggiunto al progetto Vercel (`vercel domains add`). Record
+  DNS richiesto (ancora da aggiungere su Cloudflare dall'utente): `A app 76.76.21.21`, DNS
+  only (non proxato, altrimenti Vercel non emette il certificato TLS). Non tocca `www`.
+- Rimandati a domani: `DEEPGRAM_API_KEY`, provider email (proposto Resend, vedi sopra), i
+  secret GitHub del backup (`gh secret set` dà 403 con l'autenticazione CLI corrente —
+  l'utente li inserisce dal sito).
