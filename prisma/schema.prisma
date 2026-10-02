@@ -13,6 +13,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  // Prisma 7: "url"/"directUrl" qui non sono più supportati (vanno in prisma.config.ts).
+  // DATABASE_URL (pooler, runtime) e DIRECT_URL (diretta, migrazioni) sono spiegate lì.
 }
 
 /// Cosa l'utente può fare IN UNA SOCIETÀ (vedi Membership).
