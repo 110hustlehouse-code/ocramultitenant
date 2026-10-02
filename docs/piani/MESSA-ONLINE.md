@@ -41,8 +41,8 @@ Lavoro di solo codice, nessuna azione richiesta all'utente. Checklist:
       `scripts/import-anagrafiche-reali.ts` (già esistente, richiede i file locali dell'utente)
 - [x] Verifica che `dev-login` sia irraggiungibile con `NODE_ENV=production`
 - [ ] ~~Sentry~~ **rimandato** — vedi nota sotto
-- [ ] GitHub Action di backup: `pg_dump` notturno del DB di produzione su bucket R2 dedicato,
-      conservazione 30 giorni, script di ripristino documentato
+- [x] GitHub Action di backup: `pg_dump` notturno del DB di produzione su bucket R2 dedicato,
+      conservazione 30 giorni, script di ripristino documentato (`docs/BACKUP.md`)
 - [ ] `npm run check` e `npm run build` verdi
 - [ ] PR dedicata, merge su main
 
@@ -60,9 +60,50 @@ pubblica un fix per questo issue (nessuna modifica lasciata nel repo: pacchetto 
 
 ### Fase 3 — Infrastruttura — ⏳ non iniziata (richiede l'utente)
 
-Elenco completo delle variabili d'ambiente richieste: **da pubblicare qui prima di iniziare la
-fase**, come richiesto. Si procederà un servizio alla volta, fermandosi a ogni passo che richiede
-un'azione fisica (creare account, login CLI, incollare un valore).
+Si procede un servizio alla volta, fermandosi a ogni passo che richiede un'azione fisica (creare
+account, login CLI, incollare un valore). Elenco completo di cosa serve, prima di iniziare:
+
+**Variabili d'ambiente Vercel** (progetto `ocramultitenant`, regione funzioni `fra1`):
+
+| Variabile | Da dove viene | Note |
+|---|---|---|
+| `DATABASE_URL` | Neon (connection string, pooled) | regione EU Frankfurt |
+| `AUTH_SECRET` | generata (`openssl rand -base64 32`) | obbligatoria in produzione |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google Cloud Console → OAuth client | redirect URI: `https://app.ocrapigmento.com/api/auth/callback/google` |
+| `AUTH_DEV_LOGIN` | — | **non impostarla affatto** (o `false`) in produzione |
+| `ANTHROPIC_API_KEY` | console Anthropic | per i verbali (estrazione task dall'AI) |
+| `DEEPGRAM_API_KEY` | Deepgram | trascrizione audio — opzionale, solo se si usa quella funzione |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | Cloudflare R2 | bucket **documenti** di produzione, credenziali scoped solo a quello |
+| `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | il provider email scelto per noreply@ocrapigmento.com | vedi nota email sotto |
+| `CRON_SECRET` | generato | protegge `/api/cron/richiami` |
+| `APP_URL` | — | `https://app.ocrapigmento.com` |
+
+**Secret + variabile GitHub Actions** (per il backup, repo → Settings → Secrets and variables):
+
+| Nome | Tipo | Cos'è |
+|---|---|---|
+| `PROD_DATABASE_URL` | secret | connection string Neon di produzione |
+| `R2_BACKUP_ACCOUNT_ID` | secret | account Cloudflare (probabilmente uguale a `R2_ACCOUNT_ID`) |
+| `R2_BACKUP_ACCESS_KEY_ID` / `R2_BACKUP_SECRET_ACCESS_KEY` | secret | credenziali scoped **solo** al bucket di backup |
+| `R2_BACKUP_BUCKET` | secret | bucket R2 **backup**, separato da quello documenti |
+| `BACKUP_ENABLED` | variable (non segreto) | `true` per accendere il workflow notturno |
+
+**Nota email transazionali**: il codice invia via SMTP diretto (`nodemailer`, pensato per Google
+Workspace). Per un mittente `noreply@ocrapigmento.com` con SPF/DKIM/DMARC servono o (a) una
+casella Google Workspace su quel dominio con password per le app, o (b) un provider
+transazionale (Resend, Postmark, SES...) con relay SMTP — da decidere insieme quando si arriva
+a questo punto, è l'unica cosa infrastrutturale non già scelta in partenza.
+
+**Account/servizi da creare o configurare** (azioni fisiche, una alla volta quando si arriva lì):
+1. Progetto Neon (EU Frankfurt) + database
+2. Progetto Vercel nuovo, collegato al repo, regione funzioni `fra1`
+3. Due bucket Cloudflare R2 (documenti + backup), giurisdizione EU, con due coppie di
+   credenziali scoped separate
+4. Dominio `app.ocrapigmento.com`: record DNS verso Vercel (CNAME/A forniti da Vercel dopo aver
+   aggiunto il dominio al progetto)
+5. Google Cloud OAuth client per `AUTH_GOOGLE_ID`/`SECRET`
+6. Provider email per `noreply@ocrapigmento.com` (decisione da prendere al momento, vedi nota sopra)
+7. I 6 secret + 1 variabile GitHub Actions per il backup
 
 ### Fase 4 — Deploy e verifica — ⏳ non iniziata
 
@@ -92,3 +133,9 @@ un'azione fisica (creare account, login CLI, incollare un valore).
   Nessuna modifica necessaria.
 - Sentry: installato, poi disinstallato per il bug Turbopack/Next 16 descritto sopra. Repo
   tornato pulito (`package.json`/lockfile invariati rispetto al commit precedente).
+- `.github/workflows/backup.yml`: `pg_dump` notturno (container `postgres:17-alpine`, evita
+  disallineamenti di versione col runner) → R2 bucket backup dedicato, retention 30 giorni.
+  Spento finché la variabile `BACKUP_ENABLED` non è `true` (niente rossi finché i secret non
+  ci sono). `scripts/restore-backup.sh` per il ripristino, con conferma esplicita.
+  Documentato in `docs/BACKUP.md`. Elenco completo variabili/account per la Fase 3 compilato
+  qui sopra.
