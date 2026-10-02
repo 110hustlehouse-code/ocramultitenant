@@ -1,0 +1,56 @@
+name: Backup database produzione
+
+on:
+  schedule:
+    # 03:15 UTC ogni notte — fuori dall'orario di lavoro in Italia
+    - cron: "15 3 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    # Finché i secret non sono configurati (Fase 3/4 del piano) il job si salta invece
+    # di fallire ogni notte con un rosso inutile.
+    if: ${{ vars.BACKUP_ENABLED == 'true' }}
+    steps:
+      - name: Dump del database di produzione
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          docker run --rm -e DATABASE_URL \
+            -v "$PWD":/backup \
+            postgres:17-alpine \
+            sh -c 'pg_dump "$DATABASE_URL" -Fc -f /backup/ocra-backup.dump'
+
+      - name: Carica su R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT: https://${{ secrets.R2_BACKUP_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          R2_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
+        run: |
+          set -euo pipefail
+          KEY="ocra-backups/db-$(date -u +%Y-%m-%d).dump"
+          aws s3 cp ocra-backup.dump "s3://${R2_BUCKET}/${KEY}" --endpoint-url "$R2_ENDPOINT"
+          echo "Caricato: ${KEY}"
+
+      - name: Elimina i backup più vecchi di 30 giorni
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT: https://${{ secrets.R2_BACKUP_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          R2_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
+        run: |
+          set -euo pipefail
+          CUTOFF=$(date -u -d "30 days ago" +%Y-%m-%d)
+          aws s3api list-objects-v2 --bucket "$R2_BUCKET" --prefix "ocra-backups/" --endpoint-url "$R2_ENDPOINT" \
+            --query "Contents[?LastModified<='${CUTOFF}T00:00:00.000Z'].Key" --output text \
+            | tr '\t' '\n' \
+            | while read -r key; do
+                [ -z "$key" ] && continue
+                echo "Elimino backup scaduto: $key"
+                aws s3 rm "s3://${R2_BUCKET}/${key}" --endpoint-url "$R2_ENDPOINT"
+              done

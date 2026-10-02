@@ -10,13 +10,18 @@ import { PrismaClient, type ModuleKey, type Role } from "../src/generated/prisma
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL mancante");
 
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
+export const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
 
 const DAY = 24 * 60 * 60 * 1000;
 
 const MODULES: ModuleKey[] = ["ANAGRAFICHE", "PROGETTI", "VERBALI", "RICHIAMO", "SOLLECITI", "DOCUMENTI", "MARGINE", "PREVENTIVI", "COLLABORATORI"];
 
-async function main() {
+/**
+ * Tenant, società e listino reali del gruppo Masini — nessun utente, nessun dato di test.
+ * Usata sia dal seed di sviluppo (sotto, con gli utenti @ocra.local) sia da quello di
+ * produzione (prisma/seed-production.ts, che si ferma qui).
+ */
+export async function seedMasiniCore() {
   const tenant = await prisma.tenant.upsert({
     where: { slug: "masini" },
     update: { modules: MODULES },
@@ -132,12 +137,18 @@ async function main() {
     })),
   });
 
-  // Ruoli per società (decisioni del 23 set). Email @ocra.local = accesso di sviluppo;
-  // le email vere si aggiungono all'onboarding.
-  const ALL = ["fulcro-lucem", "duit", "start-factory"] as const;
-  type Seat = { email: string; name: string; access: Partial<Record<(typeof ALL)[number], Role>>; accessExpiresAt?: Date };
-  const everywhere = (role: Role) => Object.fromEntries(ALL.map((slug) => [slug, role]));
+  return { tenant, bySlug, companiesCount: companies.length };
+}
 
+const ALL = ["fulcro-lucem", "duit", "start-factory"] as const;
+type Seat = { email: string; name: string; access: Partial<Record<(typeof ALL)[number], Role>>; accessExpiresAt?: Date };
+const everywhere = (role: Role) => Object.fromEntries(ALL.map((slug) => [slug, role]));
+
+/**
+ * Utenti di sviluppo (@ocra.local) con un ruolo per società: mai in produzione.
+ * Usa SEED_OWNER_EMAIL per aggiungersi come CEO in locale, senza committare la propria email.
+ */
+async function seedMasiniDevUsers(tenant: { id: string; name: string }, bySlug: Map<string, string>) {
   const users: Seat[] = [
     { email: "daniele@ocra.local", name: "Daniele Masini", access: everywhere("CEO") },
     // Erika è "CEOO" di Fulcro e St'Art (e PM di Fulcro): da CEO vede anche i numeri. Duit no.
@@ -177,7 +188,14 @@ async function main() {
     }
   }
 
-  console.log(`✓ Seed completato: tenant "${tenant.name}", ${companies.length} società, ${users.length} utenti.`);
+  return { usersCount: users.length };
+}
+
+/** Seed di sviluppo: dati reali + utenti @ocra.local + tenant demo. Mai in produzione. */
+async function main() {
+  const { tenant, bySlug, companiesCount } = await seedMasiniCore();
+  const { usersCount } = await seedMasiniDevUsers(tenant, bySlug);
+  console.log(`✓ Seed completato: tenant "${tenant.name}", ${companiesCount} società, ${usersCount} utenti.`);
 }
 
 /**
@@ -442,10 +460,14 @@ async function seedDemo() {
   );
 }
 
-main()
-  .then(seedDemo)
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+// Si auto-esegue solo quando lanciato direttamente (`tsx prisma/seed.ts`), non quando
+// prisma/seed-production.ts importa seedMasiniCore da qui.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main()
+    .then(seedDemo)
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}

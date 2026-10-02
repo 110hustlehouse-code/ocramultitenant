@@ -17,6 +17,7 @@
     "db:deploy": "prisma migrate deploy",
     "predb:seed": "prisma generate",
     "db:seed": "prisma db seed",
+    "db:seed:prod": "tsx prisma/seed-production.ts",
     "db:reset": "prisma migrate reset",
     "db:studio": "prisma studio",
     "db:wait": "node scripts/wait-for-db.mjs",
