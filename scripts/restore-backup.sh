@@ -26,7 +26,8 @@ set -euo pipefail
 export AWS_ACCESS_KEY_ID="$R2_BACKUP_ACCESS_KEY_ID"
 export AWS_SECRET_ACCESS_KEY="$R2_BACKUP_SECRET_ACCESS_KEY"
 export AWS_DEFAULT_REGION=auto
-ENDPOINT="https://${R2_BACKUP_ACCOUNT_ID}.r2.cloudflarestorage.com"
+# Bucket con giurisdizione EU: serve il segmento ".eu." nell'endpoint.
+ENDPOINT="https://${R2_BACKUP_ACCOUNT_ID}.eu.r2.cloudflarestorage.com"
 
 KEY="${1:-}"
 if [ -z "$KEY" ]; then
